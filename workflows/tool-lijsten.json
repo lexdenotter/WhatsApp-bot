@@ -1,0 +1,449 @@
+{
+  "id": "HBToolLijsten001",
+  "name": "Huishoudbot tool — lijsten",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "nodes": [
+    {
+      "id": "b1000000-0000-4000-8000-000000000001",
+      "name": "Aangeroepen als tool",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [-1200, 0],
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {"name": "actie"},
+            {"name": "lijst"},
+            {"name": "items"},
+            {"name": "afzender"}
+          ]
+        }
+      }
+    },
+    {
+      "id": "b1000000-0000-4000-8000-000000000002",
+      "name": "Normaliseren",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-980, 0],
+      "parameters": {
+        "jsCode": "const j = $input.first().json;\nconst actie = String(j.actie || '').toLowerCase().trim();\nconst lijst = (String(j.lijst || '').toLowerCase().trim()) || 'boodschappen';\nconst items = String(j.items || '')\n  .split(',')\n  .map(s => s.trim())\n  .filter(Boolean);\nconst afzender = String(j.afzender || 'onbekend');\nreturn [{ json: { actie, lijst, items, afzender } }];"
+      }
+    },
+    {
+      "id": "b1000000-0000-4000-8000-000000000003",
+      "name": "Welke actie?",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [-760, 0],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {"caseSensitive": false, "leftValue": "", "typeValidation": "loose", "version": 2},
+                "combinator": "and",
+                "conditions": [
+                  {"id": "r1", "leftValue": "={{ $json.actie }}", "rightValue": "toevoegen", "operator": {"type": "string", "operation": "equals"}}
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "toevoegen"
+            },
+            {
+              "conditions": {
+                "options": {"caseSensitive": false, "leftValue": "", "typeValidation": "loose", "version": 2},
+                "combinator": "and",
+                "conditions": [
+                  {"id": "r2", "leftValue": "={{ $json.actie }}", "rightValue": "tonen", "operator": {"type": "string", "operation": "equals"}}
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "tonen"
+            },
+            {
+              "conditions": {
+                "options": {"caseSensitive": false, "leftValue": "", "typeValidation": "loose", "version": 2},
+                "combinator": "and",
+                "conditions": [
+                  {"id": "r3", "leftValue": "={{ $json.actie }}", "rightValue": "overzicht", "operator": {"type": "string", "operation": "equals"}}
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "overzicht"
+            },
+            {
+              "conditions": {
+                "options": {"caseSensitive": false, "leftValue": "", "typeValidation": "loose", "version": 2},
+                "combinator": "and",
+                "conditions": [
+                  {"id": "r4", "leftValue": "={{ $json.actie }}", "rightValue": "afvinken", "operator": {"type": "string", "operation": "equals"}}
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "afvinken"
+            },
+            {
+              "conditions": {
+                "options": {"caseSensitive": false, "leftValue": "", "typeValidation": "loose", "version": 2},
+                "combinator": "and",
+                "conditions": [
+                  {"id": "r5", "leftValue": "={{ $json.actie }}", "rightValue": "verwijderen", "operator": {"type": "string", "operation": "equals"}}
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "verwijderen"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      }
+    },
+    {
+      "id": "b1000000-0000-4000-8000-000000000004",
+      "name": "Items uitsplitsen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-520, -300],
+      "parameters": {
+        "jsCode": "const j = $input.first().json;\nif (!j.items.length) {\n  return [{ json: { resultaat: 'Er zijn geen items opgegeven om toe te voegen.' } }];\n}\nreturn j.items.map(tekst => ({ json: { lijst: j.lijst, tekst, afzender: j.afzender } }));"
+      }
+    },
+    {
+      "id": "b1000000-0000-4000-8000-000000000005",
+      "name": "Item opslaan",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [-300, -300],
+      "notesInFlow": true,
+      "notes": "Selecteer hier de tabel 'items'",
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "operation": "insert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "items"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "lijst": "={{ $json.lijst }}",
+            "tekst": "={{ $json.tekst }}",
+            "klaar": "nee",
+            "toegevoegd_door": "={{ $json.afzender }}",
+            "datum": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "b1000000-0000-4000-8000-000000000006",
+      "name": "Bevestig toevoegen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-80, -300],
+      "parameters": {
+        "jsCode": "const invoer = $('Normaliseren').first().json;\nif (!invoer.items.length) {\n  return [{ json: { resultaat: 'Er zijn geen items opgegeven om toe te voegen.' } }];\n}\nreturn [{ json: { resultaat: `Toegevoegd aan de lijst '${invoer.lijst}': ${invoer.items.join(', ')}` } }];"
+      }
+    },
+    {
+      "id": "b1000000-0000-4000-8000-000000000007",
+      "name": "Haal lijst op",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [-520, -120],
+      "notesInFlow": true,
+      "notes": "Selecteer hier de tabel 'items'",
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "items"
+        },
+        "returnAll": true,
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {"keyName": "lijst", "condition": "eq", "keyValue": "={{ $json.lijst }}"}
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "b1000000-0000-4000-8000-000000000008",
+      "name": "Toon lijst",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-300, -120],
+      "parameters": {
+        "jsCode": "const invoer = $('Normaliseren').first().json;\nconst rijen = $input.all().map(i => i.json).filter(r => r && r.tekst);\nconst open = rijen.filter(r => String(r.klaar) !== 'ja');\nif (!open.length) {\n  return [{ json: { resultaat: `De lijst '${invoer.lijst}' is leeg.` } }];\n}\nconst regels = open.map(r => `• ${r.tekst}`);\nreturn [{ json: { resultaat: `Op de lijst '${invoer.lijst}' staat:\\n${regels.join('\\n')}` } }];"
+      }
+    },
+    {
+      "id": "b1000000-0000-4000-8000-000000000009",
+      "name": "Haal alle items op",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [-520, 60],
+      "notesInFlow": true,
+      "notes": "Selecteer hier de tabel 'items'",
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "items"
+        },
+        "returnAll": true,
+        "filters": {
+          "conditions": []
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "b1000000-0000-4000-8000-00000000000a",
+      "name": "Toon overzicht",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-300, 60],
+      "parameters": {
+        "jsCode": "const rijen = $input.all().map(i => i.json).filter(r => r && r.tekst);\nconst open = rijen.filter(r => String(r.klaar) !== 'ja');\nif (!open.length) {\n  return [{ json: { resultaat: 'Alle lijsten zijn leeg.' } }];\n}\nconst perLijst = {};\nfor (const r of open) {\n  const l = r.lijst || 'boodschappen';\n  (perLijst[l] = perLijst[l] || []).push(r.tekst);\n}\nconst blokken = Object.entries(perLijst).map(([l, ts]) => `${l}:\\n` + ts.map(t => `• ${t}`).join('\\n'));\nreturn [{ json: { resultaat: blokken.join('\\n\\n') } }];"
+      }
+    },
+    {
+      "id": "b1000000-0000-4000-8000-00000000000b",
+      "name": "Haal lijst op (afvinken)",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [-520, 240],
+      "notesInFlow": true,
+      "notes": "Selecteer hier de tabel 'items'",
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "items"
+        },
+        "returnAll": true,
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {"keyName": "lijst", "condition": "eq", "keyValue": "={{ $json.lijst }}"}
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "b1000000-0000-4000-8000-00000000000c",
+      "name": "Zoek items (afvinken)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-300, 240],
+      "parameters": {
+        "jsCode": "const invoer = $('Normaliseren').first().json;\nconst rijen = $input.all().map(i => i.json).filter(r => r && r.tekst && String(r.klaar) !== 'ja');\nconst gezocht = invoer.items.map(s => s.toLowerCase());\nconst matches = rijen.filter(r => {\n  const t = String(r.tekst).toLowerCase();\n  return gezocht.some(z => t.includes(z) || z.includes(t));\n});\nif (!gezocht.length) {\n  return [{ json: { id: '', geenMatch: true, melding: 'Geen items opgegeven om af te vinken.' } }];\n}\nif (!matches.length) {\n  return [{ json: { id: '', geenMatch: true, melding: `Niets gevonden op de lijst '${invoer.lijst}' dat lijkt op: ${invoer.items.join(', ')}` } }];\n}\nreturn matches.map(r => ({ json: { id: r.id, tekst: r.tekst } }));"
+      }
+    },
+    {
+      "id": "b1000000-0000-4000-8000-00000000000d",
+      "name": "Vink af",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [-80, 240],
+      "notesInFlow": true,
+      "notes": "Selecteer hier de tabel 'items'",
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "items"
+        },
+        "filters": {
+          "conditions": [
+            {"keyName": "id", "condition": "eq", "keyValue": "={{ $json.id }}"}
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "klaar": "ja"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "b1000000-0000-4000-8000-00000000000e",
+      "name": "Bevestig afvinken",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [140, 240],
+      "parameters": {
+        "jsCode": "const gevonden = $('Zoek items (afvinken)').all().map(i => i.json);\nif (gevonden.length && gevonden[0].geenMatch) {\n  return [{ json: { resultaat: gevonden[0].melding } }];\n}\nconst namen = gevonden.map(g => g.tekst);\nreturn [{ json: { resultaat: `Afgevinkt: ${namen.join(', ')}` } }];"
+      }
+    },
+    {
+      "id": "b1000000-0000-4000-8000-00000000000f",
+      "name": "Haal lijst op (verwijderen)",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [-520, 420],
+      "notesInFlow": true,
+      "notes": "Selecteer hier de tabel 'items'",
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "items"
+        },
+        "returnAll": true,
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {"keyName": "lijst", "condition": "eq", "keyValue": "={{ $json.lijst }}"}
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "b1000000-0000-4000-8000-000000000010",
+      "name": "Zoek items (verwijderen)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-300, 420],
+      "parameters": {
+        "jsCode": "const invoer = $('Normaliseren').first().json;\nconst rijen = $input.all().map(i => i.json).filter(r => r && r.tekst);\nconst gezocht = invoer.items.map(s => s.toLowerCase());\nconst matches = rijen.filter(r => {\n  const t = String(r.tekst).toLowerCase();\n  return gezocht.some(z => t.includes(z) || z.includes(t));\n});\nif (!gezocht.length) {\n  return [{ json: { id: '', geenMatch: true, melding: 'Geen items opgegeven om te verwijderen.' } }];\n}\nif (!matches.length) {\n  return [{ json: { id: '', geenMatch: true, melding: `Niets gevonden op de lijst '${invoer.lijst}' dat lijkt op: ${invoer.items.join(', ')}` } }];\n}\nreturn matches.map(r => ({ json: { id: r.id, tekst: r.tekst } }));"
+      }
+    },
+    {
+      "id": "b1000000-0000-4000-8000-000000000011",
+      "name": "Verwijder",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [-80, 420],
+      "notesInFlow": true,
+      "notes": "Selecteer hier de tabel 'items'",
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "operation": "deleteRows",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "items"
+        },
+        "filters": {
+          "conditions": [
+            {"keyName": "id", "condition": "eq", "keyValue": "={{ $json.id }}"}
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "b1000000-0000-4000-8000-000000000012",
+      "name": "Bevestig verwijderen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [140, 420],
+      "parameters": {
+        "jsCode": "const gevonden = $('Zoek items (verwijderen)').all().map(i => i.json);\nif (gevonden.length && gevonden[0].geenMatch) {\n  return [{ json: { resultaat: gevonden[0].melding } }];\n}\nconst namen = gevonden.map(g => g.tekst);\nreturn [{ json: { resultaat: `Verwijderd van de lijst: ${namen.join(', ')}` } }];"
+      }
+    },
+    {
+      "id": "b1000000-0000-4000-8000-000000000013",
+      "name": "Onbekende actie",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-520, 600],
+      "parameters": {
+        "jsCode": "const j = $input.first().json;\nreturn [{ json: { resultaat: `Onbekende actie '${j.actie}'. Geldige acties: toevoegen, tonen, overzicht, afvinken, verwijderen.` } }];"
+      }
+    }
+  ],
+  "connections": {
+    "Aangeroepen als tool": {
+      "main": [[{"node": "Normaliseren", "type": "main", "index": 0}]]
+    },
+    "Normaliseren": {
+      "main": [[{"node": "Welke actie?", "type": "main", "index": 0}]]
+    },
+    "Welke actie?": {
+      "main": [
+        [{"node": "Items uitsplitsen", "type": "main", "index": 0}],
+        [{"node": "Haal lijst op", "type": "main", "index": 0}],
+        [{"node": "Haal alle items op", "type": "main", "index": 0}],
+        [{"node": "Haal lijst op (afvinken)", "type": "main", "index": 0}],
+        [{"node": "Haal lijst op (verwijderen)", "type": "main", "index": 0}],
+        [{"node": "Onbekende actie", "type": "main", "index": 0}]
+      ]
+    },
+    "Items uitsplitsen": {
+      "main": [[{"node": "Item opslaan", "type": "main", "index": 0}]]
+    },
+    "Item opslaan": {
+      "main": [[{"node": "Bevestig toevoegen", "type": "main", "index": 0}]]
+    },
+    "Haal lijst op": {
+      "main": [[{"node": "Toon lijst", "type": "main", "index": 0}]]
+    },
+    "Haal alle items op": {
+      "main": [[{"node": "Toon overzicht", "type": "main", "index": 0}]]
+    },
+    "Haal lijst op (afvinken)": {
+      "main": [[{"node": "Zoek items (afvinken)", "type": "main", "index": 0}]]
+    },
+    "Zoek items (afvinken)": {
+      "main": [[{"node": "Vink af", "type": "main", "index": 0}]]
+    },
+    "Vink af": {
+      "main": [[{"node": "Bevestig afvinken", "type": "main", "index": 0}]]
+    },
+    "Haal lijst op (verwijderen)": {
+      "main": [[{"node": "Zoek items (verwijderen)", "type": "main", "index": 0}]]
+    },
+    "Zoek items (verwijderen)": {
+      "main": [[{"node": "Verwijder", "type": "main", "index": 0}]]
+    },
+    "Verwijder": {
+      "main": [[{"node": "Bevestig verwijderen", "type": "main", "index": 0}]]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}

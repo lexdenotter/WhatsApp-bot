@@ -1,0 +1,498 @@
+{
+  "id": "HBAanbiedFetch01",
+  "name": "Huishoudbot — aanbiedingen ophalen (wekelijks)",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "nodes": [
+    {
+      "id": "e1000000-0000-4000-8000-000000000001",
+      "name": "Elke maandagochtend",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-1560, 0],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 1"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "e1000000-0000-4000-8000-000000000002",
+      "name": "Instellingen aanbiedingen",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-1340, 0],
+      "notesInFlow": true,
+      "notes": "Vul hier het chat-id van jullie groep in",
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "s1",
+              "name": "chatId",
+              "type": "string",
+              "value": ""
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "e1000000-0000-4000-8000-000000000003",
+      "name": "AH bonuspagina ophalen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-1120, -220],
+      "onError": "continueErrorOutput",
+      "parameters": {
+        "url": "https://www.ah.nl/bonus",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "User-Agent", "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"},
+            {"name": "Accept", "value": "text/html,application/xhtml+xml"},
+            {"name": "Accept-Language", "value": "nl-NL,nl;q=0.9"}
+          ]
+        },
+        "options": {
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "e1000000-0000-4000-8000-000000000004",
+      "name": "AH parsen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-900, -220],
+      "onError": "continueErrorOutput",
+      "parameters": {
+        "jsCode": "// Haalt de bonusaanbiedingen uit de JSON die ah.nl in de pagina insluit (window.__INITIAL_STATE__).\n// Onofficiële bron: als AH de structuur wijzigt, geeft deze node een duidelijke fout.\nconst html = String($input.first().json.data || '');\nconst marker = 'window.__INITIAL_STATE__=';\nconst start = html.indexOf(marker);\nif (start === -1) {\n  throw new Error('Kon window.__INITIAL_STATE__ niet vinden op ah.nl/bonus — structuur gewijzigd of verzoek geblokkeerd.');\n}\nconst rest = html.slice(start + marker.length);\nconst end = rest.indexOf('</script>');\nlet raw = (end === -1 ? rest : rest.slice(0, end)).trim();\nif (raw.endsWith(';')) raw = raw.slice(0, -1);\nraw = raw.replace(/:undefined([,}\\]])/g, ':null$1');\nlet state;\ntry {\n  state = JSON.parse(raw);\n} catch (e) {\n  throw new Error('Kon de AH-bonusdata niet als JSON lezen: ' + e.message);\n}\n\nconst offers = [];\nconst seen = new Set();\nconst vandaag = new Date().toISOString().slice(0, 10);\n\nfunction walk(o, diepte) {\n  if (!o || typeof o !== 'object' || diepte > 25) return;\n  if (Array.isArray(o)) { for (const v of o) walk(v, diepte + 1); return; }\n  const title = o.title || o.shortTitle;\n  const mech = o.bonusMechanism || o.discountLabel || o.discountDescription\n    || (o.discount && typeof o.discount === 'object' ? (o.discount.description || o.discount.label || o.discount.theme) : null);\n  if (typeof title === 'string' && title.length > 1 && typeof mech === 'string' && mech.length > 0) {\n    const key = (title + '|' + mech).toLowerCase();\n    if (!seen.has(key)) {\n      seen.add(key);\n      let prijs = '';\n      if (o.price && typeof o.price === 'object') { prijs = o.price.now ?? o.price.bonus ?? ''; }\n      else if (o.bonusPrice != null) { prijs = o.bonusPrice; }\n      const geldig = o.validUntil || o.bonusEndDate || o.endDate || '';\n      offers.push({\n        winkel: 'AH',\n        product: title,\n        prijs: String(prijs ?? ''),\n        korting: mech,\n        geldig_tot: String(geldig).slice(0, 10),\n        opgehaald_op: vandaag,\n      });\n    }\n  }\n  for (const v of Object.values(o)) walk(v, diepte + 1);\n}\nwalk(state, 0);\n\nif (!offers.length) {\n  throw new Error('Geen aanbiedingen gevonden in de AH-data — structuur waarschijnlijk gewijzigd.');\n}\nreturn [{ json: { winkel: 'AH', aantal: offers.length, aanbiedingen: offers } }];"
+      }
+    },
+    {
+      "id": "e1000000-0000-4000-8000-000000000005",
+      "name": "Wis oude AH-aanbiedingen",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [-680, -220],
+      "notesInFlow": true,
+      "notes": "Selecteer hier de tabel 'aanbiedingen'",
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "operation": "deleteRows",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "aanbiedingen"
+        },
+        "filters": {
+          "conditions": [
+            {"keyName": "winkel", "condition": "eq", "keyValue": "AH"}
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "e1000000-0000-4000-8000-000000000006",
+      "name": "AH uitsplitsen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-460, -220],
+      "executeOnce": true,
+      "parameters": {
+        "jsCode": "return $('AH parsen').first().json.aanbiedingen.map(a => ({ json: a }));"
+      }
+    },
+    {
+      "id": "e1000000-0000-4000-8000-000000000007",
+      "name": "Sla AH op",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [-240, -220],
+      "notesInFlow": true,
+      "notes": "Selecteer hier de tabel 'aanbiedingen'",
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "operation": "insert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "aanbiedingen"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "winkel": "={{ $json.winkel }}",
+            "product": "={{ $json.product }}",
+            "prijs": "={{ $json.prijs }}",
+            "korting": "={{ $json.korting }}",
+            "geldig_tot": "={{ $json.geldig_tot }}",
+            "opgehaald_op": "={{ $json.opgehaald_op }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "e1000000-0000-4000-8000-000000000008",
+      "name": "Plus aanbiedingen ophalen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-1120, 220],
+      "onError": "continueErrorOutput",
+      "parameters": {
+        "url": "https://www.supermarktaanbiedingen.com/aanbiedingen/plus",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "User-Agent", "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"},
+            {"name": "Accept", "value": "text/html,application/xhtml+xml"},
+            {"name": "Accept-Language", "value": "nl-NL,nl;q=0.9"}
+          ]
+        },
+        "options": {
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "e1000000-0000-4000-8000-000000000009",
+      "name": "Plus HTML naar tekst",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-900, 220],
+      "onError": "continueErrorOutput",
+      "parameters": {
+        "jsCode": "// plus.nl zelf rendert client-side; daarom gebruiken we een server-gerenderde aggregatorpagina\n// en laten we Gemini de aanbiedingen uit de kale tekst halen.\nlet html = String($input.first().json.data || '');\nhtml = html.replace(/<script[\\s\\S]*?<\\/script>/gi, ' ').replace(/<style[\\s\\S]*?<\\/style>/gi, ' ');\nlet tekst = html\n  .replace(/<[^>]+>/g, ' ')\n  .replace(/&nbsp;/gi, ' ')\n  .replace(/&amp;/gi, '&')\n  .replace(/&euro;/gi, '€')\n  .replace(/\\s+/g, ' ')\n  .trim();\nif (tekst.length < 500) {\n  throw new Error('De Plus-aanbiedingenpagina leverde te weinig tekst op — structuur gewijzigd of verzoek geblokkeerd.');\n}\nreturn [{ json: { tekst: tekst.slice(0, 60000) } }];"
+      }
+    },
+    {
+      "id": "e1000000-0000-4000-8000-00000000000a",
+      "name": "Plus aanbiedingen extraheren",
+      "type": "@n8n/n8n-nodes-langchain.informationExtractor",
+      "typeVersion": 1.2,
+      "position": [-680, 220],
+      "onError": "continueErrorOutput",
+      "parameters": {
+        "text": "={{ $json.tekst }}",
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"aanbiedingen\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"product\": { \"type\": \"string\", \"description\": \"Naam van het product of de productgroep\" },\n          \"prijs\": { \"type\": \"string\", \"description\": \"Actieprijs in euro's, bijv. 2.49 (leeg indien onbekend)\" },\n          \"korting\": { \"type\": \"string\", \"description\": \"Het kortingsmechanisme, bijv. '1+1 gratis' of '25% korting'\" },\n          \"geldig_tot\": { \"type\": \"string\", \"description\": \"Einddatum jjjj-mm-dd indien vermeld, anders leeg\" }\n        },\n        \"required\": [\"product\"]\n      }\n    }\n  },\n  \"required\": [\"aanbiedingen\"]\n}",
+        "options": {
+          "systemPromptTemplate": "Je krijgt de kale tekst van een Nederlandse pagina met supermarktaanbiedingen van Plus. Haal er alle concrete productaanbiedingen uit. Sla navigatie, cookiemeldingen en andere ruis over. Geef alleen echte aanbiedingen terug."
+        }
+      }
+    },
+    {
+      "id": "e1000000-0000-4000-8000-00000000000b",
+      "name": "Gemini (extractie)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [-680, 420],
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash",
+        "options": {}
+      },
+      "credentials": {
+        "googlePalmApi": {
+          "id": "VERVANG_NA_IMPORT",
+          "name": "Google Gemini (gratis tier)"
+        }
+      }
+    },
+    {
+      "id": "e1000000-0000-4000-8000-00000000000c",
+      "name": "Plus normaliseren",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-460, 220],
+      "onError": "continueErrorOutput",
+      "parameters": {
+        "jsCode": "const uit = $input.first().json.output || $input.first().json;\nconst lijst = (uit.aanbiedingen || []).filter(a => a && a.product);\nif (!lijst.length) {\n  throw new Error('Geen Plus-aanbiedingen kunnen extraheren uit de pagina.');\n}\nconst vandaag = new Date().toISOString().slice(0, 10);\nconst offers = lijst.map(a => ({\n  winkel: 'Plus',\n  product: String(a.product).trim(),\n  prijs: String(a.prijs || '').trim(),\n  korting: String(a.korting || '').trim(),\n  geldig_tot: String(a.geldig_tot || '').trim(),\n  opgehaald_op: vandaag,\n}));\nreturn [{ json: { winkel: 'Plus', aantal: offers.length, aanbiedingen: offers } }];"
+      }
+    },
+    {
+      "id": "e1000000-0000-4000-8000-00000000000d",
+      "name": "Wis oude Plus-aanbiedingen",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [-240, 220],
+      "notesInFlow": true,
+      "notes": "Selecteer hier de tabel 'aanbiedingen'",
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "operation": "deleteRows",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "aanbiedingen"
+        },
+        "filters": {
+          "conditions": [
+            {"keyName": "winkel", "condition": "eq", "keyValue": "Plus"}
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "e1000000-0000-4000-8000-00000000000e",
+      "name": "Plus uitsplitsen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-20, 220],
+      "executeOnce": true,
+      "parameters": {
+        "jsCode": "return $('Plus normaliseren').first().json.aanbiedingen.map(a => ({ json: a }));"
+      }
+    },
+    {
+      "id": "e1000000-0000-4000-8000-00000000000f",
+      "name": "Sla Plus op",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [200, 220],
+      "notesInFlow": true,
+      "notes": "Selecteer hier de tabel 'aanbiedingen'",
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "operation": "insert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "aanbiedingen"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "winkel": "={{ $json.winkel }}",
+            "product": "={{ $json.product }}",
+            "prijs": "={{ $json.prijs }}",
+            "korting": "={{ $json.korting }}",
+            "geldig_tot": "={{ $json.geldig_tot }}",
+            "opgehaald_op": "={{ $json.opgehaald_op }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "e1000000-0000-4000-8000-000000000010",
+      "name": "Wacht op beide winkels",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [440, 0],
+      "alwaysOutputData": true,
+      "parameters": {
+        "mode": "append",
+        "numberInputs": 2
+      }
+    },
+    {
+      "id": "e1000000-0000-4000-8000-000000000011",
+      "name": "Boodschappenhistorie ophalen",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [660, 0],
+      "notesInFlow": true,
+      "notes": "Selecteer hier de tabel 'items'",
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "items"
+        },
+        "returnAll": true,
+        "filters": {
+          "conditions": []
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "e1000000-0000-4000-8000-000000000012",
+      "name": "Match & weekbericht",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 0],
+      "parameters": {
+        "jsCode": "const inst = $('Instellingen aanbiedingen').first().json;\nconst chatId = String(inst.chatId || '').trim();\nif (!chatId) { return []; } // geen chat-id ingesteld → stil eindigen\n\nfunction veilig(naam) {\n  try { return $(naam).first().json; } catch (e) { return null; }\n}\nconst ah = veilig('AH parsen');\nconst plus = veilig('Plus normaliseren');\nconst offers = [\n  ...((ah && ah.aanbiedingen) || []),\n  ...((plus && plus.aanbiedingen) || []),\n];\n\n// 'Vaak gekocht' = items die 2+ keer op een lijst hebben gestaan\nconst historie = $input.all().map(i => i.json).filter(r => r && r.tekst);\nconst freq = {};\nfor (const r of historie) {\n  const t = String(r.tekst).toLowerCase().trim();\n  if (t.length > 2) { freq[t] = (freq[t] || 0) + 1; }\n}\nconst vaak = Object.entries(freq).filter(([, n]) => n >= 2).map(([t]) => t);\n\nconst matches = [];\nfor (const o of offers) {\n  const p = String(o.product).toLowerCase();\n  for (const v of vaak) {\n    if (p.includes(v) || v.includes(p)) {\n      matches.push(`• [${o.winkel}] ${o.product}${o.korting ? ' — ' + o.korting : ''}`);\n      break;\n    }\n  }\n}\n\nconst delen = [];\ndelen.push(`🛒 Aanbiedingen opgehaald: ${ah ? ah.aantal + ' van AH' : 'AH mislukt'}, ${plus ? plus.aantal + ' van Plus' : 'Plus mislukt'}.`);\nif (matches.length) {\n  delen.push(`\\nDeze week in de aanbieding van jullie vaste boodschappen:\\n${[...new Set(matches)].join('\\n')}`);\n} else {\n  delen.push('\\nGeen van jullie vaste boodschappen is deze week in de aanbieding (of er is nog te weinig boodschappenhistorie).');\n}\ndelen.push('\\nVraag me gerust: \"is er ... in de aanbieding?\" of \"wat eten we deze week?\"');\nreturn [{ json: { chatId, tekst: delen.join('\\n') } }];"
+      }
+    },
+    {
+      "id": "e1000000-0000-4000-8000-000000000013",
+      "name": "Stuur weekbericht",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1100, 0],
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.tekst }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "VERVANG_NA_IMPORT",
+          "name": "Telegram Huishoudbot"
+        }
+      }
+    },
+    {
+      "id": "e1000000-0000-4000-8000-000000000014",
+      "name": "Foutmelding opstellen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-460, 560],
+      "parameters": {
+        "jsCode": "const inst = $('Instellingen aanbiedingen').first().json;\nconst chatId = String(inst.chatId || '').trim();\nif (!chatId) { return []; }\nconst meldingen = $input.all().map(i => {\n  const e = i.json.error;\n  if (e && typeof e === 'object') { return e.message || JSON.stringify(e); }\n  return String(e || i.json.message || 'onbekende fout');\n});\nreturn [{ json: { chatId, tekst: `⚠️ Het ophalen van de aanbiedingen is (deels) mislukt:\\n${[...new Set(meldingen)].map(m => '• ' + m).join('\\n')}\\n\\nZie de uitvoeringsdetails in n8n.` } }];"
+      }
+    },
+    {
+      "id": "e1000000-0000-4000-8000-000000000015",
+      "name": "Stuur foutmelding",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [-240, 560],
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.tekst }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "VERVANG_NA_IMPORT",
+          "name": "Telegram Huishoudbot"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Elke maandagochtend": {
+      "main": [[{"node": "Instellingen aanbiedingen", "type": "main", "index": 0}]]
+    },
+    "Instellingen aanbiedingen": {
+      "main": [[
+        {"node": "AH bonuspagina ophalen", "type": "main", "index": 0},
+        {"node": "Plus aanbiedingen ophalen", "type": "main", "index": 0}
+      ]]
+    },
+    "AH bonuspagina ophalen": {
+      "main": [
+        [{"node": "AH parsen", "type": "main", "index": 0}],
+        [{"node": "Foutmelding opstellen", "type": "main", "index": 0}]
+      ]
+    },
+    "AH parsen": {
+      "main": [
+        [{"node": "Wis oude AH-aanbiedingen", "type": "main", "index": 0}],
+        [{"node": "Foutmelding opstellen", "type": "main", "index": 0}]
+      ]
+    },
+    "Wis oude AH-aanbiedingen": {
+      "main": [[{"node": "AH uitsplitsen", "type": "main", "index": 0}]]
+    },
+    "AH uitsplitsen": {
+      "main": [[{"node": "Sla AH op", "type": "main", "index": 0}]]
+    },
+    "Sla AH op": {
+      "main": [[{"node": "Wacht op beide winkels", "type": "main", "index": 0}]]
+    },
+    "Plus aanbiedingen ophalen": {
+      "main": [
+        [{"node": "Plus HTML naar tekst", "type": "main", "index": 0}],
+        [{"node": "Foutmelding opstellen", "type": "main", "index": 0}]
+      ]
+    },
+    "Plus HTML naar tekst": {
+      "main": [
+        [{"node": "Plus aanbiedingen extraheren", "type": "main", "index": 0}],
+        [{"node": "Foutmelding opstellen", "type": "main", "index": 0}]
+      ]
+    },
+    "Plus aanbiedingen extraheren": {
+      "main": [
+        [{"node": "Plus normaliseren", "type": "main", "index": 0}],
+        [{"node": "Foutmelding opstellen", "type": "main", "index": 0}]
+      ]
+    },
+    "Gemini (extractie)": {
+      "ai_languageModel": [[{"node": "Plus aanbiedingen extraheren", "type": "ai_languageModel", "index": 0}]]
+    },
+    "Plus normaliseren": {
+      "main": [
+        [{"node": "Wis oude Plus-aanbiedingen", "type": "main", "index": 0}],
+        [{"node": "Foutmelding opstellen", "type": "main", "index": 0}]
+      ]
+    },
+    "Wis oude Plus-aanbiedingen": {
+      "main": [[{"node": "Plus uitsplitsen", "type": "main", "index": 0}]]
+    },
+    "Plus uitsplitsen": {
+      "main": [[{"node": "Sla Plus op", "type": "main", "index": 0}]]
+    },
+    "Sla Plus op": {
+      "main": [[{"node": "Wacht op beide winkels", "type": "main", "index": 1}]]
+    },
+    "Wacht op beide winkels": {
+      "main": [[{"node": "Boodschappenhistorie ophalen", "type": "main", "index": 0}]]
+    },
+    "Boodschappenhistorie ophalen": {
+      "main": [[{"node": "Match & weekbericht", "type": "main", "index": 0}]]
+    },
+    "Match & weekbericht": {
+      "main": [[{"node": "Stuur weekbericht", "type": "main", "index": 0}]]
+    },
+    "Foutmelding opstellen": {
+      "main": [[{"node": "Stuur foutmelding", "type": "main", "index": 0}]]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

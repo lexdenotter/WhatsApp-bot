@@ -1,0 +1,22 @@
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    container_name: huishoudbot-n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      - GENERIC_TIMEZONE=${GENERIC_TIMEZONE:-Europe/Amsterdam}
+      - TZ=${TZ:-Europe/Amsterdam}
+      # Nodig wanneer je n8n op je LAN via http (zonder TLS) benadert, bijv. http://raspberrypi.local:5678
+      - N8N_SECURE_COOKIE=false
+      - N8N_RUNNERS_ENABLED=true
+      - N8N_DIAGNOSTICS_ENABLED=false
+    volumes:
+      # Alle n8n-data (workflows, credentials, Data Tables) overleeft zo een herstart/update
+      - n8n_data:/home/node/.n8n
+      # Zodat je de workflows uit deze repo via de CLI kunt importeren
+      - ./workflows:/workflows:ro
+
+volumes:
+  n8n_data:

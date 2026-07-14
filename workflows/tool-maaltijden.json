@@ -1,0 +1,296 @@
+{
+  "id": "HBToolMaaltijd01",
+  "name": "Huishoudbot tool — maaltijden",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "nodes": [
+    {
+      "id": "c1000000-0000-4000-8000-000000000001",
+      "name": "Aangeroepen als tool",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [-1200, 0],
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {"name": "actie"},
+            {"name": "gerecht"},
+            {"name": "datum"},
+            {"name": "sleutel"},
+            {"name": "waarde"}
+          ]
+        }
+      }
+    },
+    {
+      "id": "c1000000-0000-4000-8000-000000000002",
+      "name": "Normaliseren",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-980, 0],
+      "parameters": {
+        "jsCode": "const j = $input.first().json;\nconst actie = String(j.actie || '').toLowerCase().trim();\nconst gerecht = String(j.gerecht || '').trim();\nlet datum = String(j.datum || '').trim();\nif (!/^\\d{4}-\\d{2}-\\d{2}$/.test(datum)) {\n  datum = new Date().toISOString().slice(0, 10);\n}\nconst sleutel = String(j.sleutel || '').toLowerCase().trim();\nconst waarde = String(j.waarde || '').trim();\nreturn [{ json: { actie, gerecht, datum, sleutel, waarde } }];"
+      }
+    },
+    {
+      "id": "c1000000-0000-4000-8000-000000000003",
+      "name": "Welke actie?",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [-760, 0],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {"caseSensitive": false, "leftValue": "", "typeValidation": "loose", "version": 2},
+                "combinator": "and",
+                "conditions": [
+                  {"id": "r1", "leftValue": "={{ $json.actie }}", "rightValue": "loggen", "operator": {"type": "string", "operation": "equals"}}
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "loggen"
+            },
+            {
+              "conditions": {
+                "options": {"caseSensitive": false, "leftValue": "", "typeValidation": "loose", "version": 2},
+                "combinator": "and",
+                "conditions": [
+                  {"id": "r2", "leftValue": "={{ $json.actie }}", "rightValue": "historie", "operator": {"type": "string", "operation": "equals"}}
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "historie"
+            },
+            {
+              "conditions": {
+                "options": {"caseSensitive": false, "leftValue": "", "typeValidation": "loose", "version": 2},
+                "combinator": "and",
+                "conditions": [
+                  {"id": "r3", "leftValue": "={{ $json.actie }}", "rightValue": "voorkeur_opslaan", "operator": {"type": "string", "operation": "equals"}}
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "voorkeur_opslaan"
+            },
+            {
+              "conditions": {
+                "options": {"caseSensitive": false, "leftValue": "", "typeValidation": "loose", "version": 2},
+                "combinator": "and",
+                "conditions": [
+                  {"id": "r4", "leftValue": "={{ $json.actie }}", "rightValue": "voorkeuren", "operator": {"type": "string", "operation": "equals"}}
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "voorkeuren"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      }
+    },
+    {
+      "id": "c1000000-0000-4000-8000-000000000004",
+      "name": "Maaltijd opslaan",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [-520, -240],
+      "notesInFlow": true,
+      "notes": "Selecteer hier de tabel 'maaltijden'",
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "operation": "insert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "maaltijden"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "gerecht": "={{ $json.gerecht }}",
+            "gegeten_op": "={{ $json.datum }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c1000000-0000-4000-8000-000000000005",
+      "name": "Bevestig loggen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-300, -240],
+      "parameters": {
+        "jsCode": "const invoer = $('Normaliseren').first().json;\nif (!invoer.gerecht) {\n  return [{ json: { resultaat: 'Er is geen gerecht opgegeven om te loggen.' } }];\n}\nreturn [{ json: { resultaat: `Genoteerd: op ${invoer.datum} eten jullie ${invoer.gerecht}.` } }];"
+      }
+    },
+    {
+      "id": "c1000000-0000-4000-8000-000000000006",
+      "name": "Haal historie op",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [-520, -60],
+      "notesInFlow": true,
+      "notes": "Selecteer hier de tabel 'maaltijden'",
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "maaltijden"
+        },
+        "returnAll": true,
+        "filters": {
+          "conditions": []
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c1000000-0000-4000-8000-000000000007",
+      "name": "Toon historie",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-300, -60],
+      "parameters": {
+        "jsCode": "const rijen = $input.all().map(i => i.json).filter(r => r && r.gerecht);\nif (!rijen.length) {\n  return [{ json: { resultaat: 'Er zijn nog geen maaltijden gelogd.' } }];\n}\nrijen.sort((a, b) => String(b.gegeten_op).localeCompare(String(a.gegeten_op)));\nconst recent = rijen.slice(0, 20);\nconst regels = recent.map(r => `• ${r.gegeten_op}: ${r.gerecht}`);\nreturn [{ json: { resultaat: `Laatst gegeten maaltijden (nieuwste eerst):\\n${regels.join('\\n')}` } }];"
+      }
+    },
+    {
+      "id": "c1000000-0000-4000-8000-000000000008",
+      "name": "Voorkeur opslaan",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [-520, 120],
+      "notesInFlow": true,
+      "notes": "Selecteer hier de tabel 'voorkeuren'",
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "voorkeuren"
+        },
+        "filters": {
+          "conditions": [
+            {"keyName": "sleutel", "condition": "eq", "keyValue": "={{ $json.sleutel }}"}
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "sleutel": "={{ $json.sleutel }}",
+            "waarde": "={{ $json.waarde }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c1000000-0000-4000-8000-000000000009",
+      "name": "Bevestig voorkeur",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-300, 120],
+      "parameters": {
+        "jsCode": "const invoer = $('Normaliseren').first().json;\nif (!invoer.sleutel || !invoer.waarde) {\n  return [{ json: { resultaat: 'Om een voorkeur op te slaan zijn zowel een sleutel als een waarde nodig.' } }];\n}\nreturn [{ json: { resultaat: `Voorkeur opgeslagen: ${invoer.sleutel} = ${invoer.waarde}` } }];"
+      }
+    },
+    {
+      "id": "c1000000-0000-4000-8000-00000000000a",
+      "name": "Haal voorkeuren op",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [-520, 300],
+      "notesInFlow": true,
+      "notes": "Selecteer hier de tabel 'voorkeuren'",
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "voorkeuren"
+        },
+        "returnAll": true,
+        "filters": {
+          "conditions": []
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c1000000-0000-4000-8000-00000000000b",
+      "name": "Toon voorkeuren",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-300, 300],
+      "parameters": {
+        "jsCode": "const rijen = $input.all().map(i => i.json).filter(r => r && r.sleutel);\nif (!rijen.length) {\n  return [{ json: { resultaat: 'Er zijn nog geen eetvoorkeuren opgeslagen.' } }];\n}\nconst regels = rijen.map(r => `• ${r.sleutel}: ${r.waarde}`);\nreturn [{ json: { resultaat: `Opgeslagen voorkeuren:\\n${regels.join('\\n')}` } }];"
+      }
+    },
+    {
+      "id": "c1000000-0000-4000-8000-00000000000c",
+      "name": "Onbekende actie",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-520, 480],
+      "parameters": {
+        "jsCode": "const j = $input.first().json;\nreturn [{ json: { resultaat: `Onbekende actie '${j.actie}'. Geldige acties: loggen, historie, voorkeur_opslaan, voorkeuren.` } }];"
+      }
+    }
+  ],
+  "connections": {
+    "Aangeroepen als tool": {
+      "main": [[{"node": "Normaliseren", "type": "main", "index": 0}]]
+    },
+    "Normaliseren": {
+      "main": [[{"node": "Welke actie?", "type": "main", "index": 0}]]
+    },
+    "Welke actie?": {
+      "main": [
+        [{"node": "Maaltijd opslaan", "type": "main", "index": 0}],
+        [{"node": "Haal historie op", "type": "main", "index": 0}],
+        [{"node": "Voorkeur opslaan", "type": "main", "index": 0}],
+        [{"node": "Haal voorkeuren op", "type": "main", "index": 0}],
+        [{"node": "Onbekende actie", "type": "main", "index": 0}]
+      ]
+    },
+    "Maaltijd opslaan": {
+      "main": [[{"node": "Bevestig loggen", "type": "main", "index": 0}]]
+    },
+    "Haal historie op": {
+      "main": [[{"node": "Toon historie", "type": "main", "index": 0}]]
+    },
+    "Voorkeur opslaan": {
+      "main": [[{"node": "Bevestig voorkeur", "type": "main", "index": 0}]]
+    },
+    "Haal voorkeuren op": {
+      "main": [[{"node": "Toon voorkeuren", "type": "main", "index": 0}]]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}
