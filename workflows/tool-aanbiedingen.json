@@ -1,0 +1,71 @@
+{
+  "id": "HBToolAanbied001",
+  "name": "Huishoudbot tool — aanbiedingen",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "nodes": [
+    {
+      "id": "d1000000-0000-4000-8000-000000000001",
+      "name": "Aangeroepen als tool",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [-1200, 0],
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {"name": "actie"},
+            {"name": "zoekterm"}
+          ]
+        }
+      }
+    },
+    {
+      "id": "d1000000-0000-4000-8000-000000000002",
+      "name": "Haal aanbiedingen op",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [-980, 0],
+      "notesInFlow": true,
+      "notes": "Selecteer hier de tabel 'aanbiedingen'",
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "aanbiedingen"
+        },
+        "returnAll": true,
+        "filters": {
+          "conditions": []
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d1000000-0000-4000-8000-000000000003",
+      "name": "Filter & formatteer",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-760, 0],
+      "parameters": {
+        "jsCode": "const invoer = $('Aangeroepen als tool').first().json;\nconst actie = String(invoer.actie || 'alles').toLowerCase().trim();\nconst zoekterm = String(invoer.zoekterm || '').toLowerCase().trim();\n\nlet rijen = $input.all().map(i => i.json).filter(r => r && r.product);\nif (!rijen.length) {\n  return [{ json: { resultaat: 'Er zijn (nog) geen aanbiedingen bekend. De aanbiedingen-workflow haalt ze wekelijks op; je kunt hem ook handmatig draaien.' } }];\n}\n\n// Alleen de meest recente ophaalronde gebruiken\nconst laatste = rijen.map(r => String(r.opgehaald_op || '')).sort().pop();\nrijen = rijen.filter(r => String(r.opgehaald_op || '') === laatste);\n\nif (actie === 'zoeken' && zoekterm) {\n  rijen = rijen.filter(r => String(r.product).toLowerCase().includes(zoekterm));\n  if (!rijen.length) {\n    return [{ json: { resultaat: `Geen aanbiedingen gevonden voor '${zoekterm}' (bij AH en Plus, week van ${laatste}).` } }];\n  }\n}\n\nconst max = 40;\nconst regels = rijen.slice(0, max).map(r => {\n  const delen = [`• [${r.winkel}] ${r.product}`];\n  if (r.korting) delen.push(String(r.korting));\n  if (r.prijs) delen.push(`€${r.prijs}`);\n  return delen.join(' — ');\n});\nlet resultaat = `Aanbiedingen (opgehaald op ${laatste}):\\n${regels.join('\\n')}`;\nif (rijen.length > max) {\n  resultaat += `\\n… en nog ${rijen.length - max} andere aanbiedingen.`;\n}\nreturn [{ json: { resultaat } }];"
+      }
+    }
+  ],
+  "connections": {
+    "Aangeroepen als tool": {
+      "main": [[{"node": "Haal aanbiedingen op", "type": "main", "index": 0}]]
+    },
+    "Haal aanbiedingen op": {
+      "main": [[{"node": "Filter & formatteer", "type": "main", "index": 0}]]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}
