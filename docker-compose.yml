@@ -3,13 +3,18 @@ services:
     image: docker.n8n.io/n8nio/n8n:latest
     container_name: huishoudbot-n8n
     restart: unless-stopped
-    ports:
-      - "5678:5678"
+    expose:
+      - "5678"
     environment:
       - GENERIC_TIMEZONE=${GENERIC_TIMEZONE:-Europe/Amsterdam}
       - TZ=${TZ:-Europe/Amsterdam}
-      # Nodig wanneer je n8n op je LAN via http (zonder TLS) benadert, bijv. http://raspberrypi.local:5678
-      - N8N_SECURE_COOKIE=false
+      - N8N_HOST=${N8N_HOST}
+      - N8N_PROTOCOL=https
+      - N8N_PORT=5678
+      - WEBHOOK_URL=https://${N8N_HOST}/
+      - N8N_EDITOR_BASE_URL=https://${N8N_HOST}/
+      # We draaien achter de Caddy-reverse-proxy hieronder (1 hop)
+      - N8N_PROXY_HOPS=1
       - N8N_RUNNERS_ENABLED=true
       - N8N_DIAGNOSTICS_ENABLED=false
     volumes:
@@ -17,6 +22,31 @@ services:
       - n8n_data:/home/node/.n8n
       # Zodat je de workflows uit deze repo via de CLI kunt importeren
       - ./workflows:/workflows:ro
+    networks:
+      - web
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: huishoudbot-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - N8N_HOST=${N8N_HOST}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - web
+    depends_on:
+      - n8n
+
+networks:
+  web:
 
 volumes:
   n8n_data:
+  caddy_data:
+  caddy_config:
