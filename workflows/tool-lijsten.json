@@ -176,7 +176,7 @@
           "cachedResultName": "items"
         },
         "returnAll": true,
-        "matchType": "allFilters",
+        "matchType": "ALL_CONDITIONS",
         "filters": {
           "conditions": [
             {"keyName": "lijst", "condition": "eq", "keyValue": "={{ $json.lijst }}"}
@@ -247,7 +247,7 @@
           "cachedResultName": "items"
         },
         "returnAll": true,
-        "matchType": "allFilters",
+        "matchType": "ALL_CONDITIONS",
         "filters": {
           "conditions": [
             {"keyName": "lijst", "condition": "eq", "keyValue": "={{ $json.lijst }}"}
@@ -329,7 +329,7 @@
           "cachedResultName": "items"
         },
         "returnAll": true,
-        "matchType": "allFilters",
+        "matchType": "ALL_CONDITIONS",
         "filters": {
           "conditions": [
             {"keyName": "lijst", "condition": "eq", "keyValue": "={{ $json.lijst }}"}
