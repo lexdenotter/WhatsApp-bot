@@ -1,0 +1,286 @@
+{
+  "id": "HBToolHerinner01",
+  "name": "Huishoudbot tool — herinneringen",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "nodes": [
+    {
+      "id": "f1000000-0000-4000-8000-000000000001",
+      "name": "Aangeroepen als tool",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [-1200, 0],
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {"name": "actie"},
+            {"name": "tekst"},
+            {"name": "eerste_keer"},
+            {"name": "herhaling"},
+            {"name": "chat_id"},
+            {"name": "afzender"}
+          ]
+        }
+      }
+    },
+    {
+      "id": "f1000000-0000-4000-8000-000000000002",
+      "name": "Normaliseren",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-980, 0],
+      "parameters": {
+        "jsCode": "const j = $input.first().json;\nconst actie = String(j.actie || '').toLowerCase().trim();\nconst tekst = String(j.tekst || '').trim();\nconst chatId = String(j.chat_id || '').trim();\nconst afzender = String(j.afzender || 'onbekend');\nlet herhaling = String(j.herhaling || '').toLowerCase().trim();\nif (!['dagelijks', 'wekelijks', 'maandelijks'].includes(herhaling)) herhaling = '';\n\n// eerste_keer verwachten we als 'jjjj-MM-dd' of 'jjjj-MM-dd uu:mm'. Ontbrekende/onjuiste tijd -> 09:00.\nlet ruw = String(j.eerste_keer || '').trim();\nlet datumDeel = '';\nlet tijdDeel = '09:00';\nconst m = ruw.match(/^(\\d{4}-\\d{2}-\\d{2})(?:[ T](\\d{2}:\\d{2}))?/);\nif (m) {\n  datumDeel = m[1];\n  if (m[2]) tijdDeel = m[2];\n}\n\nlet volgendeOp = '';\nif (datumDeel) {\n  volgendeOp = `${datumDeel} ${tijdDeel}`;\n}\n\nreturn [{ json: { actie, tekst, volgendeOp, herhaling, chatId, afzender } }];"
+      }
+    },
+    {
+      "id": "f1000000-0000-4000-8000-000000000003",
+      "name": "Welke actie?",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [-760, 0],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {"caseSensitive": false, "leftValue": "", "typeValidation": "loose", "version": 2},
+                "combinator": "and",
+                "conditions": [
+                  {"id": "r1", "leftValue": "={{ $json.actie }}", "rightValue": "toevoegen", "operator": {"type": "string", "operation": "equals"}}
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "toevoegen"
+            },
+            {
+              "conditions": {
+                "options": {"caseSensitive": false, "leftValue": "", "typeValidation": "loose", "version": 2},
+                "combinator": "and",
+                "conditions": [
+                  {"id": "r2", "leftValue": "={{ $json.actie }}", "rightValue": "tonen", "operator": {"type": "string", "operation": "equals"}}
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "tonen"
+            },
+            {
+              "conditions": {
+                "options": {"caseSensitive": false, "leftValue": "", "typeValidation": "loose", "version": 2},
+                "combinator": "and",
+                "conditions": [
+                  {"id": "r3", "leftValue": "={{ $json.actie }}", "rightValue": "verwijderen", "operator": {"type": "string", "operation": "equals"}}
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "verwijderen"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      }
+    },
+    {
+      "id": "f1000000-0000-4000-8000-000000000004",
+      "name": "Herinnering opslaan",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [-520, -220],
+      "notesInFlow": true,
+      "notes": "Selecteer hier de tabel 'herinneringen'",
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "operation": "insert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "herinneringen"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "tekst": "={{ $json.tekst }}",
+            "volgende_op": "={{ $json.volgendeOp }}",
+            "herhaling": "={{ $json.herhaling }}",
+            "chat_id": "={{ $json.chatId }}",
+            "toegevoegd_door": "={{ $json.afzender }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "f1000000-0000-4000-8000-000000000005",
+      "name": "Bevestig toevoegen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-300, -220],
+      "parameters": {
+        "jsCode": "const invoer = $('Normaliseren').first().json;\nif (!invoer.tekst || !invoer.volgendeOp) {\n  return [{ json: { resultaat: 'Ik kon geen geldige datum/tijd uit je bericht halen. Geef een datum op zoals \"2026-07-21\" of \"volgende week dinsdag\", eventueel met een tijd.' } }];\n}\nconst [datum, tijd] = invoer.volgendeOp.split(' ');\nconst dagen = ['zondag','maandag','dinsdag','woensdag','donderdag','vrijdag','zaterdag'];\nconst dagnaam = dagen[new Date(datum + 'T00:00:00').getDay()];\nlet herhalingTekst = '';\nif (invoer.herhaling === 'dagelijks') herhalingTekst = 'Elke dag';\nelse if (invoer.herhaling === 'wekelijks') herhalingTekst = `Elke ${dagnaam}`;\nelse if (invoer.herhaling === 'maandelijks') herhalingTekst = `Elke maand op de ${datum.slice(-2)}e`;\nelse herhalingTekst = `Op ${dagnaam} ${datum.split('-').reverse().join('-')}`;\nreturn [{ json: { resultaat: `Genoteerd. ${herhalingTekst} om ${tijd} herinner ik jullie aan: ${invoer.tekst}` } }];"
+      }
+    },
+    {
+      "id": "f1000000-0000-4000-8000-000000000006",
+      "name": "Haal herinneringen op",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [-520, 0],
+      "notesInFlow": true,
+      "notes": "Selecteer hier de tabel 'herinneringen'",
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "herinneringen"
+        },
+        "returnAll": true,
+        "matchType": "ALL_CONDITIONS",
+        "filters": {
+          "conditions": [
+            {"keyName": "chat_id", "condition": "eq", "keyValue": "={{ $json.chatId }}"}
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "f1000000-0000-4000-8000-000000000007",
+      "name": "Toon herinneringen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-300, 0],
+      "parameters": {
+        "jsCode": "const rijen = $input.all().map(i => i.json).filter(r => r && r.tekst);\nif (!rijen.length) {\n  return [{ json: { resultaat: 'Er staan nog geen herinneringen ingesteld.' } }];\n}\nrijen.sort((a, b) => String(a.volgende_op).localeCompare(String(b.volgende_op)));\nconst dagen = ['zondag','maandag','dinsdag','woensdag','donderdag','vrijdag','zaterdag'];\nconst regels = rijen.map(r => {\n  const [datum, tijd] = String(r.volgende_op).split(' ');\n  const dagnaam = dagen[new Date(datum + 'T00:00:00').getDay()];\n  let wanneer;\n  if (r.herhaling === 'dagelijks') wanneer = `elke dag om ${tijd}`;\n  else if (r.herhaling === 'wekelijks') wanneer = `elke ${dagnaam} om ${tijd}`;\n  else if (r.herhaling === 'maandelijks') wanneer = `elke maand op de ${datum.slice(-2)}e om ${tijd}`;\n  else wanneer = `${dagnaam} ${datum.split('-').reverse().join('-')} om ${tijd}`;\n  return `• ${r.tekst} — ${wanneer}`;\n});\nreturn [{ json: { resultaat: `Ingestelde herinneringen:\\n${regels.join('\\n')}` } }];"
+      }
+    },
+    {
+      "id": "f1000000-0000-4000-8000-000000000008",
+      "name": "Haal herinneringen op (verwijderen)",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [-520, 220],
+      "notesInFlow": true,
+      "notes": "Selecteer hier de tabel 'herinneringen'",
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "herinneringen"
+        },
+        "returnAll": true,
+        "matchType": "ALL_CONDITIONS",
+        "filters": {
+          "conditions": [
+            {"keyName": "chat_id", "condition": "eq", "keyValue": "={{ $json.chatId }}"}
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "f1000000-0000-4000-8000-000000000009",
+      "name": "Zoek herinnering",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-300, 220],
+      "parameters": {
+        "jsCode": "const invoer = $('Normaliseren').first().json;\nconst rijen = $input.all().map(i => i.json).filter(r => r && r.tekst);\nconst gezocht = invoer.tekst.toLowerCase();\nif (!gezocht) {\n  return [{ json: { id: '', geenMatch: true, melding: 'Geef aan welke herinnering verwijderd moet worden.' } }];\n}\nconst matches = rijen.filter(r => {\n  const t = String(r.tekst).toLowerCase();\n  return t.includes(gezocht) || gezocht.includes(t);\n});\nif (!matches.length) {\n  return [{ json: { id: '', geenMatch: true, melding: `Geen herinnering gevonden die lijkt op '${invoer.tekst}'.` } }];\n}\nreturn matches.map(r => ({ json: { id: r.id, tekst: r.tekst } }));"
+      }
+    },
+    {
+      "id": "f1000000-0000-4000-8000-00000000000a",
+      "name": "Verwijder herinnering",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [-80, 220],
+      "notesInFlow": true,
+      "notes": "Selecteer hier de tabel 'herinneringen'",
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "operation": "deleteRows",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "herinneringen"
+        },
+        "filters": {
+          "conditions": [
+            {"keyName": "id", "condition": "eq", "keyValue": "={{ $json.id }}"}
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "f1000000-0000-4000-8000-00000000000b",
+      "name": "Bevestig verwijderen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [140, 220],
+      "parameters": {
+        "jsCode": "const gevonden = $('Zoek herinnering').all().map(i => i.json);\nif (gevonden.length && gevonden[0].geenMatch) {\n  return [{ json: { resultaat: gevonden[0].melding } }];\n}\nconst namen = gevonden.map(g => g.tekst);\nreturn [{ json: { resultaat: `Verwijderd: ${namen.join(', ')}` } }];"
+      }
+    },
+    {
+      "id": "f1000000-0000-4000-8000-00000000000c",
+      "name": "Onbekende actie",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-520, 400],
+      "parameters": {
+        "jsCode": "const j = $input.first().json;\nreturn [{ json: { resultaat: `Onbekende actie '${j.actie}'. Geldige acties: toevoegen, tonen, verwijderen.` } }];"
+      }
+    }
+  ],
+  "connections": {
+    "Aangeroepen als tool": {
+      "main": [[{"node": "Normaliseren", "type": "main", "index": 0}]]
+    },
+    "Normaliseren": {
+      "main": [[{"node": "Welke actie?", "type": "main", "index": 0}]]
+    },
+    "Welke actie?": {
+      "main": [
+        [{"node": "Herinnering opslaan", "type": "main", "index": 0}],
+        [{"node": "Haal herinneringen op", "type": "main", "index": 0}],
+        [{"node": "Haal herinneringen op (verwijderen)", "type": "main", "index": 0}],
+        [{"node": "Onbekende actie", "type": "main", "index": 0}]
+      ]
+    },
+    "Herinnering opslaan": {
+      "main": [[{"node": "Bevestig toevoegen", "type": "main", "index": 0}]]
+    },
+    "Haal herinneringen op": {
+      "main": [[{"node": "Toon herinneringen", "type": "main", "index": 0}]]
+    },
+    "Haal herinneringen op (verwijderen)": {
+      "main": [[{"node": "Zoek herinnering", "type": "main", "index": 0}]]
+    },
+    "Zoek herinnering": {
+      "main": [[{"node": "Verwijder herinnering", "type": "main", "index": 0}]]
+    },
+    "Verwijder herinnering": {
+      "main": [[{"node": "Bevestig verwijderen", "type": "main", "index": 0}]]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}

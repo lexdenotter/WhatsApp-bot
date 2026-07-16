@@ -218,7 +218,7 @@
       "typeVersion": 1,
       "position": [-680, 420],
       "parameters": {
-        "modelName": "models/gemini-3.5-flash",
+        "modelName": "models/gemini-3.1-flash-lite",
         "options": {}
       },
       "credentials": {

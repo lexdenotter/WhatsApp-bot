@@ -4,9 +4,12 @@ Een chatbot voor het huishouden, voor twee personen in een Telegram-groepschat. 
 
 - houdt **gedeelde lijstjes** bij (boodschappen, klusjes, …) in gewoon Nederlands: *"zet melk en eieren op de boodschappenlijst"*, *"streep melk maar door"*;
 - helpt **bedenken wat je gaat eten**, rekening houdend met jullie voorkeuren en wat je recent al at;
-- haalt wekelijks de **aanbiedingen van Albert Heijn en Plus** op, meldt welke van jullie vaste boodschappen in de aanbieding zijn en gebruikt de aanbiedingen bij maaltijdsuggesties.
+- haalt wekelijks de **aanbiedingen van Albert Heijn en Plus** op, meldt welke van jullie vaste boodschappen in de aanbieding zijn en gebruikt de aanbiedingen bij maaltijdsuggesties;
+- onthoudt **herinneringen** (eenmalig of herhalend) en stuurt die op het juiste moment proactief in de groep: *"herinner ons elke dinsdag om 19:00 aan stofzuigen"*.
 
-Alles draait gratis: de officiële Telegram Bot API kost niets, Google Gemini 2.5 Flash heeft een ruime gratis tier (±1.500 requests/dag — zat voor twee personen), n8n (community-editie) is gratis en zelf te hosten, en we draaien hem op een **Oracle Cloud Always Free VM** (blijvend gratis) met een gratis **DuckDNS**-subdomein.
+Alles draait gratis: de officiële Telegram Bot API kost niets, Google Gemini heeft een ruime gratis tier (±1.500 requests/dag — zat voor twee personen), n8n (community-editie) is gratis en zelf te hosten, en we draaien hem op een **Oracle Cloud Always Free VM** (blijvend gratis) met een gratis **DuckDNS**-subdomein.
+
+> **Welk Gemini-model?** Google hernoemt/faseert modellen weleens uit (dat overkwam ons ook tijdens de bouw). De workflows staan nu op `models/gemini-3.1-flash-lite`. Krijg je een 404 ("no longer available") of aanhoudende 503-fouten in de Gemini-node, check dan [Google AI Studio](https://aistudio.google.com) voor het actuele modelaanbod en wijzig het **Model**-veld in de betreffende Gemini-node(s) (in "Huishoudbot" en in "aanbiedingen ophalen").
 
 > **Waarom een cloud-VM en geen Raspberry Pi?** Twee redenen: (1) n8n's Telegram-node werkt via een **webhook** — Telegram moet je server via internet met HTTPS kunnen bereiken, wat op een Pi thuis poort-doorschakeling + een geldig certificaat vereist; op een VPS met publiek IP is dat veel eenvoudiger. (2) n8n heeft al gauw een paar GB schijfruimte nodig — kleine SD-kaarten (zoals op een Pi 3) lopen daarmee snel vol. Oracle's Always Free-laag geeft je een ARM-VM met meer geheugen en schijfruimte, voor €0.
 
@@ -20,16 +23,21 @@ Telegram groepschat
    ▼
 Whitelist + mention-filter (alleen jullie chat, alleen berichten aan de bot)
    ▼
-AI Agent (Gemini 2.5 Flash, Nederlands, geheugen per chat)
-   ├─ tool: lijsten       → Data Table 'items'
-   ├─ tool: maaltijden    → Data Tables 'maaltijden' + 'voorkeuren'
-   └─ tool: aanbiedingen  → Data Table 'aanbiedingen'
+AI Agent (Gemini, Nederlands, geheugen per chat)
+   ├─ tool: lijsten        → Data Table 'items'
+   ├─ tool: maaltijden     → Data Tables 'maaltijden' + 'voorkeuren'
+   ├─ tool: aanbiedingen   → Data Table 'aanbiedingen'
+   └─ tool: herinneringen  → Data Table 'herinneringen'
    ▼
 Antwoord in de groep
 
 Wekelijks (ma 08:00): aanbiedingen-workflow
    AH (ah.nl/bonus) + Plus (aggregator) → Data Table 'aanbiedingen'
    → match met vaak gekochte producten → weekbericht in de groep
+
+Elke 5 minuten: herinneringen-checker
+   Data Table 'herinneringen' → vervallen herinneringen? → stuur 🔔-bericht
+   → herhalend: volgende moment berekenen · eenmalig: verwijderen
 ```
 
 Bestanden in deze repo:
@@ -42,7 +50,9 @@ Bestanden in deze repo:
 | `workflows/tool-lijsten.json` | Sub-workflow (tool): lijstjes beheren |
 | `workflows/tool-maaltijden.json` | Sub-workflow (tool): maaltijdlog + voorkeuren |
 | `workflows/tool-aanbiedingen.json` | Sub-workflow (tool): zoeken in aanbiedingen |
+| `workflows/tool-herinneringen.json` | Sub-workflow (tool): herinneringen aanmaken/tonen/verwijderen |
 | `workflows/aanbiedingen-ophalen.json` | Wekelijkse workflow: AH + Plus ophalen |
+| `workflows/herinneringen-checker.json` | Elke 5 minuten: vervallen herinneringen versturen |
 
 ---
 
@@ -125,7 +135,7 @@ In n8n: **Credentials → Add credential**:
 
 ### Stap 5 — Data Tables aanmaken
 
-In n8n: **Data tables** (linkermenu) → maak deze vier tabellen aan, alle kolommen van het type *string/tekst*:
+In n8n: **Data tables** (linkermenu) → maak deze vijf tabellen aan, alle kolommen van het type *string/tekst*:
 
 | Tabel | Kolommen |
 |---|---|
@@ -133,6 +143,7 @@ In n8n: **Data tables** (linkermenu) → maak deze vier tabellen aan, alle kolom
 | `maaltijden` | `gerecht`, `gegeten_op` |
 | `voorkeuren` | `sleutel`, `waarde` |
 | `aanbiedingen` | `winkel`, `product`, `prijs`, `korting`, `geldig_tot`, `opgehaald_op` |
+| `herinneringen` | `tekst`, `volgende_op`, `herhaling`, `chat_id`, `toegevoegd_door` |
 
 ### Stap 6 — Workflows importeren
 
@@ -142,18 +153,19 @@ In n8n: **Data tables** (linkermenu) → maak deze vier tabellen aan, alle kolom
 docker compose exec n8n n8n import:workflow --separate --input=/workflows
 ```
 
-Ververs daarna de n8n-pagina; je ziet vijf workflows staan (allemaal nog inactief).
+Ververs daarna de n8n-pagina; je ziet zeven workflows staan (allemaal nog inactief).
 
-*Alternatief via de UI:* importeer elk bestand uit `workflows/` met **Workflow → Import from file**. Let op: dan krijgen de workflows nieuwe id's en moet je in de hoofdworkflow de drie **Tool:**-nodes openen en daar de juiste sub-workflow opnieuw selecteren.
+*Alternatief via de UI:* importeer elk bestand uit `workflows/` met **Workflow → Import from file**. Let op: dan krijgen de workflows nieuwe id's en moet je in de hoofdworkflow de vier **Tool:**-nodes openen en daar de juiste sub-workflow opnieuw selecteren.
 
 ### Stap 7 — Nodes koppelen (na-import-checklist)
 
 Loop deze lijst af; het zijn klikjes, geen code:
 
-- [ ] **Workflow "Huishoudbot"**: open *Telegram Trigger* en *Stuur antwoord* → selecteer je Telegram-credential. Open *Gemini 2.5 Flash* → selecteer je Gemini-credential.
+- [ ] **Workflow "Huishoudbot"**: open *Telegram Trigger* en *Stuur antwoord* → selecteer je Telegram-credential. Open *Google Gemini* → selecteer je Gemini-credential.
 - [ ] **Alle nodes met de notitie "Selecteer hier de tabel …"** (in de tool-workflows en de aanbiedingen-workflow): open de node en kies de juiste Data Table uit de dropdown.
 - [ ] **Workflow "Huishoudbot" → node "Instellingen"**: vul `botUsername` in (de gebruikersnaam van je bot, zonder `@`). `allowedChatIds` mag je nog even leeg laten — zie stap 8.
 - [ ] **Workflow "aanbiedingen ophalen"**: selecteer de Telegram- en Gemini-credentials in de betreffende nodes.
+- [ ] **Workflow "Huishoudbot — herinneringen checker"**: selecteer je Telegram-credential in *Stuur herinnering*, en kies de Data Table `herinneringen` in *Haal alle herinneringen op*, *Volgende keer instellen* en *Eenmalige verwijderen*.
 
 ### Stap 8 — Groep aanmaken en whitelisten
 
@@ -174,9 +186,12 @@ In de groep (noem de bot met `@botnaam`, of antwoord op een bericht van de bot):
 @huishoudbot wat eten we vandaag? we willen max 30 minuten koken
 @huishoudbot we eten vanavond lasagne
 @huishoudbot is er kip in de aanbieding?
+@huishoudbot herinner ons elke dinsdag om 19:00 aan stofzuigen
+@huishoudbot welke herinneringen staan er?
+@huishoudbot verwijder de herinnering voor stofzuigen
 ```
 
-Draai de workflow **"aanbiedingen ophalen"** één keer handmatig (*Execute workflow*) zodat de aanbiedingen-tabel gevuld is; daarna gebeurt dat automatisch elke maandag om 08:00.
+Draai de workflow **"aanbiedingen ophalen"** één keer handmatig (*Execute workflow*) zodat de aanbiedingen-tabel gevuld is; daarna gebeurt dat automatisch elke maandag om 08:00. Activeer ook de workflow **"Huishoudbot — herinneringen checker"** (schuifje rechtsboven) zodat herinneringen daadwerkelijk verstuurd worden.
 
 ---
 
@@ -194,7 +209,7 @@ Het **weekbericht** meldt hoeveel aanbiedingen er zijn opgehaald en welke produc
 | Onderdeel | Kosten |
 |---|---|
 | Telegram Bot API | Gratis, onbeperkt |
-| Gemini 2.5 Flash (gratis tier) | Gratis, ±1.500 requests/dag — de bot gebruikt er hooguit een handvol per bericht |
+| Google Gemini (gratis tier) | Gratis, ±1.500 requests/dag — de bot gebruikt er hooguit een handvol per bericht |
 | n8n community-editie (self-hosted) | Gratis |
 | Oracle Cloud Always Free VM | Gratis, blijvend (geen verlopende proefperiode) |
 | DuckDNS-domein | Gratis |

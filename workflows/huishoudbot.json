@@ -103,18 +103,18 @@
         "promptType": "define",
         "text": "={{ $json.text }}",
         "options": {
-          "systemMessage": "=Je bent de huishoudbot van Lex en zijn vriendin. Je helpt met gedeelde lijstjes (boodschappen, klusjes, enz.), met bedenken wat ze gaan eten, en met supermarktaanbiedingen. Je antwoordt altijd in het Nederlands, kort en vriendelijk, zonder markdown-tabellen (gewone tekst met • opsommingstekens werkt het best in Telegram).\n\nVandaag is het {{ $now.setZone('Europe/Amsterdam').toFormat('cccc d LLLL yyyy') }}. Dit bericht komt van: {{ $json.afzender }}.\n\nSpelregels:\n- Gebruik ALTIJD je tools om lijstjes, maaltijden, voorkeuren en aanbiedingen te lezen of aan te passen. Verzin nooit zelf wat er op een lijst staat.\n- De standaardlijst is 'boodschappen'. Andere lijsten (bijv. 'klusjes') mogen ook; maak ze impliciet aan door er items aan toe te voegen.\n- Als iemand zegt dat iets gekocht/gedaan is (\"melk is binnen\", \"streep X door\"), vink het af met actie 'afvinken'.\n- Maaltijdsuggesties: haal eerst de voorkeuren en de maaltijdhistorie op (tool maaltijden) en kijk in de actuele aanbiedingen (tool aanbiedingen). Stel 2 à 3 gerechten voor die recent niet gegeten zijn, passen bij de voorkeuren, en benoem het expliciet als een hoofdingrediënt nu in de aanbieding is bij AH of Plus.\n- Als er een gerecht gekozen wordt (\"we eten vanavond X\"), log het met actie 'loggen'. Bied aan om ontbrekende ingrediënten op de boodschappenlijst te zetten.\n- Als iemand een blijvende voorkeur noemt (allergie, \"doordeweeks max 30 min koken\", lievelingsgerecht), sla die op met actie 'voorkeur_opslaan'.\n- Weet je iets niet of mislukt een tool, zeg dat dan eerlijk."
+          "systemMessage": "=Je bent de huishoudbot van Lex en zijn vriendin. Je helpt met gedeelde lijstjes (boodschappen, klusjes, enz.), met bedenken wat ze gaan eten, en met supermarktaanbiedingen. Je antwoordt altijd in het Nederlands, kort en vriendelijk, zonder markdown-tabellen (gewone tekst met • opsommingstekens werkt het best in Telegram).\n\nVandaag is het {{ $now.setZone('Europe/Amsterdam').toFormat('cccc d LLLL yyyy') }}. Dit bericht komt van: {{ $json.afzender }}.\n\nSpelregels:\n- Gebruik ALTIJD je tools om lijstjes, maaltijden, voorkeuren en aanbiedingen te lezen of aan te passen. Verzin nooit zelf wat er op een lijst staat.\n- De standaardlijst is 'boodschappen'. Andere lijsten (bijv. 'klusjes') mogen ook; maak ze impliciet aan door er items aan toe te voegen.\n- Als iemand zegt dat iets gekocht/gedaan is (\"melk is binnen\", \"streep X door\"), vink het af met actie 'afvinken'.\n- Maaltijdsuggesties: haal eerst de voorkeuren en de maaltijdhistorie op (tool maaltijden) en kijk in de actuele aanbiedingen (tool aanbiedingen). Stel 2 à 3 gerechten voor die recent niet gegeten zijn, passen bij de voorkeuren, en benoem het expliciet als een hoofdingrediënt nu in de aanbieding is bij AH of Plus.\n- Als er een gerecht gekozen wordt (\"we eten vanavond X\"), log het met actie 'loggen'. Bied aan om ontbrekende ingrediënten op de boodschappenlijst te zetten.\n- Als iemand een blijvende voorkeur noemt (allergie, \"doordeweeks max 30 min koken\", lievelingsgerecht), sla die op met actie 'voorkeur_opslaan'.\n- Herinneringen: als iemand vraagt om ergens aan herinnerd te worden (\"herinner ons elke dinsdag om 19:00 aan stofzuigen\", \"herinner me morgen aan de was\"), gebruik de tool 'herinneringen' met actie 'toevoegen'. Bereken de eerstvolgende exacte datum+tijd zelf op basis van de datum van vandaag hierboven (bijv. \"elke dinsdag\" → de eerstvolgende dinsdag vanaf vandaag, herhaling 'wekelijks'; \"morgen\" → vandaag + 1 dag, geen herhaling; geen tijd genoemd → 09:00) en geef die door als 'eerste_keer' in het formaat jjjj-MM-dd uu:mm. Bevestig altijd expliciet wat je hebt ingesteld, inclusief dag en tijd. Bij \"welke herinneringen staan er\" gebruik actie 'tonen'; bij \"verwijder de herinnering voor X\" gebruik actie 'verwijderen'.\n- Weet je iets niet of mislukt een tool, zeg dat dan eerlijk."
         }
       }
     },
     {
       "id": "a1000000-0000-4000-8000-000000000006",
-      "name": "Gemini 2.5 Flash",
+      "name": "Google Gemini",
       "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
       "typeVersion": 1,
       "position": [-340, 340],
       "parameters": {
-        "modelName": "models/gemini-3.5-flash",
+        "modelName": "models/gemini-3.1-flash-lite",
         "options": {}
       },
       "credentials": {
@@ -240,6 +240,45 @@
       }
     },
     {
+      "id": "a1000000-0000-4000-8000-00000000000c",
+      "name": "Tool: herinneringen",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [460, 340],
+      "parameters": {
+        "name": "herinneringen",
+        "description": "Beheert herinneringen die de bot op het juiste moment in de groep stuurt. Acties: 'toevoegen' (nieuwe herinnering instellen), 'tonen' (toon alle ingestelde herinneringen), 'verwijderen' (verwijder een herinnering op basis van de omschrijving).",
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "HBToolHerinner01",
+          "cachedResultName": "Huishoudbot tool — herinneringen"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "actie": "={{ $fromAI('actie', 'Een van: toevoegen, tonen, verwijderen', 'string') }}",
+            "tekst": "={{ $fromAI('tekst', 'Korte omschrijving waaraan herinnerd moet worden, bijv. \"stofzuigen\". Bij verwijderen: de omschrijving om op te zoeken.', 'string') }}",
+            "eerste_keer": "={{ $fromAI('eerste_keer', 'Exacte datum en tijd van het eerstvolgende moment, ALTIJD berekend t.o.v. de datum van vandaag, in het formaat jjjj-MM-dd uu:mm (bijv. 2026-07-21 09:00). Alleen bij toevoegen.', 'string') }}",
+            "herhaling": "={{ $fromAI('herhaling', 'Een van: (leeg = eenmalig), dagelijks, wekelijks, maandelijks. Alleen bij toevoegen.', 'string') }}",
+            "chat_id": "={{ $('Filter & voorbereiden').first().json.chatId }}",
+            "afzender": "={{ $('Filter & voorbereiden').first().json.afzender }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {"id": "actie", "displayName": "actie", "required": false, "defaultMatch": false, "display": true, "canBeUsedToMatch": true, "type": "string"},
+            {"id": "tekst", "displayName": "tekst", "required": false, "defaultMatch": false, "display": true, "canBeUsedToMatch": true, "type": "string"},
+            {"id": "eerste_keer", "displayName": "eerste_keer", "required": false, "defaultMatch": false, "display": true, "canBeUsedToMatch": true, "type": "string"},
+            {"id": "herhaling", "displayName": "herhaling", "required": false, "defaultMatch": false, "display": true, "canBeUsedToMatch": true, "type": "string"},
+            {"id": "chat_id", "displayName": "chat_id", "required": false, "defaultMatch": false, "display": true, "canBeUsedToMatch": true, "type": "string"},
+            {"id": "afzender", "displayName": "afzender", "required": false, "defaultMatch": false, "display": true, "canBeUsedToMatch": true, "type": "string"}
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      }
+    },
+    {
       "id": "a1000000-0000-4000-8000-00000000000b",
       "name": "Stuur antwoord",
       "type": "n8n-nodes-base.telegram",
@@ -279,7 +318,7 @@
     "AI Agent": {
       "main": [[{"node": "Stuur antwoord", "type": "main", "index": 0}]]
     },
-    "Gemini 2.5 Flash": {
+    "Google Gemini": {
       "ai_languageModel": [[{"node": "AI Agent", "type": "ai_languageModel", "index": 0}]]
     },
     "Geheugen per chat": {
@@ -292,6 +331,9 @@
       "ai_tool": [[{"node": "AI Agent", "type": "ai_tool", "index": 0}]]
     },
     "Tool: aanbiedingen": {
+      "ai_tool": [[{"node": "AI Agent", "type": "ai_tool", "index": 0}]]
+    },
+    "Tool: herinneringen": {
       "ai_tool": [[{"node": "AI Agent", "type": "ai_tool", "index": 0}]]
     }
   },
