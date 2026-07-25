@@ -197,10 +197,9 @@ Draai de workflow **"aanbiedingen ophalen"** één keer handmatig (*Execute work
 
 ## Hoe de aanbiedingen werken (en een eerlijke kanttekening)
 
-- **Albert Heijn**: de workflow leest de bonusdata die ah.nl zelf in de pagina insluit (`window.__INITIAL_STATE__`).
-- **Plus**: plus.nl rendert client-side, daarom halen we de Plus-aanbiedingen van een server-gerenderde aggregatorpagina en laat de workflow **Gemini** de aanbiedingen uit de tekst halen.
+- **Albert Heijn én Plus**: beide sites (ah.nl/bonus en plus.nl) renderen hun aanbiedingen client-side met JavaScript, waardoor een simpele HTTP-fetch geen productdata ziet. Daarom halen we voor allebei de winkels de aanbiedingen van een server-gerenderde aggregatorpagina (`supermarktaanbiedingen.com`) en laat de workflow **Gemini** de aanbiedingen uit de kale tekst halen.
 
-⚠️ Beide bronnen zijn **onofficieel**. Als AH of de aggregator de sitestructuur wijzigt, kan het ophalen breken — de workflow stuurt dan een foutmelding naar jullie groep (hij faalt dus niet stilletjes). De parse-logica zit in de Code-nodes `AH parsen` en `Plus HTML naar tekst`; daar is hij ook aan te passen.
+⚠️ De aggregator is een **onofficiële** bron. Als die de sitestructuur wijzigt, kan het ophalen breken — de workflow stuurt dan een foutmelding naar jullie groep (hij faalt dus niet stilletjes). De ophaal-/parse-logica zit in de Code-nodes `AH HTML naar tekst` en `Plus HTML naar tekst` (plus de bijbehorende "… extraheren"-nodes); daar is hij ook aan te passen.
 
 Het **weekbericht** meldt hoeveel aanbiedingen er zijn opgehaald en welke producten die jullie vaak kopen (2+ keer op de boodschappenlijst gestaan) nu in de aanbieding zijn. Bij *"wat eten we deze week?"* betrekt de bot de aanbiedingen bij zijn recepten.
 
