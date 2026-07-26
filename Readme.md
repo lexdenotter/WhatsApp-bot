@@ -5,6 +5,7 @@ Een chatbot voor het huishouden, voor twee personen in een Telegram-groepschat. 
 - houdt **gedeelde lijstjes** bij (boodschappen, klusjes, …) in gewoon Nederlands: *"zet melk en eieren op de boodschappenlijst"*, *"streep melk maar door"*;
 - helpt **bedenken wat je gaat eten**, rekening houdend met jullie voorkeuren en wat je recent al at;
 - haalt wekelijks de **aanbiedingen van Albert Heijn en Plus** op, meldt welke van jullie vaste boodschappen in de aanbieding zijn en gebruikt de aanbiedingen bij maaltijdsuggesties;
+- geeft **praktische weertips** in plaats van een weerbericht: *"vannacht vorst — plantjes naar binnen"*, *"vandaag regen, was ophangen is geen goed plan"*, *"terrasweer dit weekend"*;
 - onthoudt **herinneringen** en stuurt die op het juiste moment proactief in de groep — eenmalig of in elk ritme dat je in gewone taal noemt: *"herinner ons elke dinsdag om 19:00 aan stofzuigen"*, *"elke eerste donderdag van de maand"*, *"elke werkdag om 7:30"*, *"over 10 minuten"*.
 
 Alles draait gratis: de officiële Telegram Bot API kost niets, Google Gemini heeft een ruime gratis tier (±1.500 requests/dag — zat voor twee personen), n8n (community-editie) is gratis en zelf te hosten, en we draaien hem op een **Oracle Cloud Always Free VM** (blijvend gratis) met een gratis **DuckDNS**-subdomein.
@@ -38,6 +39,10 @@ Wekelijks (ma 08:00): aanbiedingen-workflow
 Elke 5 minuten: herinneringen-checker
    Data Table 'herinneringen' → vervallen herinneringen? → stuur 🔔-bericht
    → herhalend: volgende moment berekenen · eenmalig: verwijderen
+
+Elke ochtend (07:30): weerwaarschuwingen
+   Open-Meteo (gratis, geen account) → praktische tips (vorst, was, wind, terrasweer)
+   → alleen een bericht als er écht iets te melden is
 ```
 
 Bestanden in deze repo:
@@ -53,6 +58,7 @@ Bestanden in deze repo:
 | `workflows/tool-herinneringen.json` | Sub-workflow (tool): herinneringen aanmaken/tonen/verwijderen |
 | `workflows/aanbiedingen-ophalen.json` | Wekelijkse workflow: AH + Plus ophalen |
 | `workflows/herinneringen-checker.json` | Elke 5 minuten: vervallen herinneringen versturen |
+| `workflows/weer-waarschuwingen.json` | Elke ochtend: praktische weertips (Open-Meteo) |
 
 ---
 
@@ -155,7 +161,7 @@ In n8n: **Data tables** (linkermenu) → maak deze vijf tabellen aan, alle kolom
 docker compose exec n8n n8n import:workflow --separate --input=/workflows
 ```
 
-Ververs daarna de n8n-pagina; je ziet zeven workflows staan (allemaal nog inactief).
+Ververs daarna de n8n-pagina; je ziet acht workflows staan (allemaal nog inactief).
 
 *Alternatief via de UI:* importeer elk bestand uit `workflows/` met **Workflow → Import from file**. Let op: dan krijgen de workflows nieuwe id's en moet je in de hoofdworkflow de vier **Tool:**-nodes openen en daar de juiste sub-workflow opnieuw selecteren.
 
@@ -168,6 +174,7 @@ Loop deze lijst af; het zijn klikjes, geen code:
 - [ ] **Workflow "Huishoudbot" → node "Instellingen"**: vul `botUsername` in (de gebruikersnaam van je bot, zonder `@`). `allowedChatIds` mag je nog even leeg laten — zie stap 8.
 - [ ] **Workflow "aanbiedingen ophalen"**: selecteer de Telegram- en Gemini-credentials in de betreffende nodes.
 - [ ] **Workflow "Huishoudbot — herinneringen checker"**: selecteer je Telegram-credential in *Stuur herinnering*, en kies de Data Table `herinneringen` in *Haal alle herinneringen op*, *Volgende keer instellen* en *Eenmalige verwijderen*.
+- [ ] **Workflow "Huishoudbot — weerwaarschuwingen"**: selecteer je Telegram-credential in *Stuur weerbericht*, en vul in de node *Instellingen weer* je chat-id plus je woonplaats en coördinaten in. Coördinaten vind je door je plaats op [open-meteo.com](https://open-meteo.com) of Google Maps op te zoeken (bijv. Utrecht = 52.0907 / 5.1214). Zet je ze niet goed, dan krijg je het weer van Amsterdam.
 
 ### Stap 8 — Groep aanmaken en whitelisten
 
@@ -197,7 +204,9 @@ In de groep (noem de bot met `@botnaam`, of antwoord op een bericht van de bot):
 @huishoudbot verwijder de herinnering voor stofzuigen
 ```
 
-Draai de workflow **"aanbiedingen ophalen"** één keer handmatig (*Execute workflow*) zodat de aanbiedingen-tabel gevuld is; daarna gebeurt dat automatisch elke maandag om 08:00. Activeer ook de workflow **"Huishoudbot — herinneringen checker"** (schuifje rechtsboven) zodat herinneringen daadwerkelijk verstuurd worden.
+Draai de workflow **"aanbiedingen ophalen"** één keer handmatig (*Execute workflow*) zodat de aanbiedingen-tabel gevuld is; daarna gebeurt dat automatisch elke maandag om 08:00. Activeer ook de workflows **"Huishoudbot — herinneringen checker"** en **"Huishoudbot — weerwaarschuwingen"** (schuifje rechtsboven), zodat herinneringen en weertips daadwerkelijk verstuurd worden.
+
+> **Over de weertips.** Je krijgt alleen een bericht als er iets te melden is: nachtvorst, regen (dus geen was ophangen), harde wind, hitte, onweer, sneeuw, hoge UV, mooi drooghangweer of terrasweer. Op een doorsnee bewolkte dag blijft het stil. De weekendvooruitblik komt alleen op donderdag en vrijdag, zodat je die niet vijf keer achter elkaar krijgt. Draai de workflow handmatig om te zien wat hij vandaag zou sturen — komt er niets uit, dan is er simpelweg niets bijzonders aan het weer.
 
 ---
 
@@ -215,6 +224,7 @@ Het **weekbericht** meldt hoeveel aanbiedingen er zijn opgehaald en welke produc
 |---|---|
 | Telegram Bot API | Gratis, onbeperkt |
 | Google Gemini (gratis tier) | Gratis, ±1.500 requests/dag — de bot gebruikt er hooguit een handvol per bericht |
+| Open-Meteo (weer) | Gratis, geen account of API-key nodig (non-commercieel gebruik) |
 | n8n community-editie (self-hosted) | Gratis |
 | Oracle Cloud Always Free VM | Gratis, blijvend (geen verlopende proefperiode) |
 | DuckDNS-domein | Gratis |
@@ -233,6 +243,7 @@ Als het Gemini-dagquotum op is, krijg je een foutmelding in n8n; de volgende dag
 | "Tool: …"-node geeft een fout over de workflow | De sub-workflow-verwijzing klopt niet (gebeurt bij import via de UI) → open de node en selecteer de juiste sub-workflow |
 | Aanbiedingen ophalen mislukt | Zie de foutmelding in de groep + *Executions*; waarschijnlijk is de sitestructuur gewijzigd → pas de parse-Code-node aan |
 | Antwoorden zijn traag | Normaal: elke vraag is 1–3 Gemini-calls. De directe paden (`/help`, chat-id) zijn instant |
+| Geen weerbericht ontvangen | Dat is meestal correct: er gaat alleen een bericht uit als er iets te melden valt. Check verder of het chat-id in *Instellingen weer* staat en of de workflow actief is |
 | n8n-container crasht steeds opnieuw met een foutmelding over het configbestand | Meestal een gevolg van een eerdere volle schijf (ENOSPC) die het configbestand corrumpeerde → `docker compose down`, verwijder het volume met `docker volume rm whatsapp-bot_n8n_data` (naam kan verschillen, check met `docker volume ls`) en start opnieuw met `docker compose up -d` |
 
 ## Ideeën voor later

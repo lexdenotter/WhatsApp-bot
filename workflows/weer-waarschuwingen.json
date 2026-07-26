@@ -1,0 +1,129 @@
+{
+  "id": "HBWeerWaarschu01",
+  "name": "Huishoudbot — weerwaarschuwingen (dagelijks)",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "nodes": [
+    {
+      "id": "h1000000-0000-4000-8000-000000000001",
+      "name": "Elke ochtend",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-1120, 0],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "30 7 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "h1000000-0000-4000-8000-000000000002",
+      "name": "Instellingen weer",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-900, 0],
+      "notesInFlow": true,
+      "notes": "Vul hier het chat-id en jullie woonplaats + coördinaten in",
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "w1",
+              "name": "chatId",
+              "type": "string",
+              "value": ""
+            },
+            {
+              "id": "w2",
+              "name": "plaats",
+              "type": "string",
+              "value": "Amsterdam"
+            },
+            {
+              "id": "w3",
+              "name": "latitude",
+              "type": "string",
+              "value": "52.3676"
+            },
+            {
+              "id": "w4",
+              "name": "longitude",
+              "type": "string",
+              "value": "4.9041"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "h1000000-0000-4000-8000-000000000003",
+      "name": "Weer ophalen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-680, 0],
+      "parameters": {
+        "url": "=https://api.open-meteo.com/v1/forecast?latitude={{ $json.latitude }}&longitude={{ $json.longitude }}&timezone=Europe%2FAmsterdam&forecast_days=7&temperature_unit=celsius&wind_speed_unit=kmh&precipitation_unit=mm&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_gusts_10m_max,sunshine_duration,snowfall_sum,uv_index_max&hourly=temperature_2m,precipitation,precipitation_probability,wind_speed_10m",
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "h1000000-0000-4000-8000-000000000004",
+      "name": "Bepaal waarschuwingen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-460, 0],
+      "parameters": {
+        "jsCode": "// Zet de voorspelling van Open-Meteo om in praktische tips. Alleen als er echt iets\n// te melden is gaat er een bericht uit — een saaie dag levert dus geen ruis op.\nconst inst = $('Instellingen weer').first().json;\nconst chatId = String(inst.chatId || '').trim();\nif (!chatId) { return []; } // geen chat-id ingesteld -> stil eindigen\nconst plaats = String(inst.plaats || '').trim();\n\nconst w = $input.first().json;\nif (!w || !w.daily || !w.hourly || !Array.isArray(w.daily.time) || !Array.isArray(w.hourly.time)) {\n  throw new Error('Onverwacht antwoord van Open-Meteo: geen daily/hourly gegevens gevonden.');\n}\nconst D = w.daily;\nconst H = w.hourly;\n\nconst nu = $now.setZone('Europe/Amsterdam');\nconst vandaag = nu.toFormat('yyyy-MM-dd');\nconst morgen = nu.plus({ days: 1 }).toFormat('yyyy-MM-dd');\nconst rond = (x) => Math.round(x);\nconst dagIndex = (datum) => D.time.indexOf(datum);\nconst dagWaarde = (naam, i) => (D[naam] && i >= 0 && D[naam][i] != null) ? D[naam][i] : null;\n\n// Vat de uurlijkse gegevens samen over een venster, bijv. de dag of de nacht.\nfunction venster(vanISO, totISO) {\n  let maxKans = null, somRegen = 0, minTemp = null, maxTemp = null, maxWind = null, uren = 0;\n  for (let k = 0; k < H.time.length; k++) {\n    const t = H.time[k];\n    if (t < vanISO || t >= totISO) continue;\n    uren++;\n    const kans = H.precipitation_probability ? H.precipitation_probability[k] : null;\n    const regen = H.precipitation ? H.precipitation[k] : null;\n    const temp = H.temperature_2m ? H.temperature_2m[k] : null;\n    const wind = H.wind_speed_10m ? H.wind_speed_10m[k] : null;\n    if (kans != null) maxKans = maxKans == null ? kans : Math.max(maxKans, kans);\n    if (regen != null) somRegen += regen;\n    if (temp != null) {\n      minTemp = minTemp == null ? temp : Math.min(minTemp, temp);\n      maxTemp = maxTemp == null ? temp : Math.max(maxTemp, temp);\n    }\n    if (wind != null) maxWind = maxWind == null ? wind : Math.max(maxWind, wind);\n  }\n  return { uren, maxKans, somRegen, minTemp, maxTemp, maxWind };\n}\n\nconst iVandaag = dagIndex(vandaag);\nconst iMorgen = dagIndex(morgen);\nconst dag = venster(vandaag + 'T09:00', vandaag + 'T19:00');\nconst nacht = venster(vandaag + 'T21:00', morgen + 'T09:00');\nconst dagMorgen = venster(morgen + 'T09:00', morgen + 'T19:00');\n\nconst regels = [];\n\n// --- Vannacht: vorst en gladheid ---\nif (nacht.minTemp != null && nacht.minTemp <= 0) {\n  const glad = nacht.somRegen > 0.1;\n  regels.push(`❄️ Vannacht vorst (tot ${rond(nacht.minTemp)}°C) — plantjes naar binnen${glad ? ' en pas op voor gladheid vroeg in de ochtend' : ' en denk aan je autoruiten'}.`);\n} else if (nacht.minTemp != null && nacht.minTemp <= 3) {\n  regels.push(`🌡️ Vannacht koud (${rond(nacht.minTemp)}°C) — kans op lichte nachtvorst, gevoelige plantjes beter naar binnen.`);\n}\n\n// --- Onweer en sneeuw ---\nconst code = dagWaarde('weather_code', iVandaag);\nif (code != null && code >= 95) {\n  regels.push('⛈️ Kans op onweer vandaag — haal losse spullen van het balkon of terras.');\n}\nconst sneeuw = dagWaarde('snowfall_sum', iVandaag);\nif (sneeuw != null && sneeuw >= 0.5) {\n  regels.push(`🌨️ Sneeuw verwacht vandaag (${sneeuw.toFixed(1)} cm).`);\n}\n\n// --- Wind ---\nconst stoten = dagWaarde('wind_gusts_10m_max', iVandaag);\nif (stoten != null && stoten >= 90) {\n  regels.push(`💨 Storm vandaag (windstoten tot ${rond(stoten)} km/u) — zet tuinmeubels, parasol en trampoline vast.`);\n} else if (stoten != null && stoten >= 60) {\n  regels.push(`💨 Harde wind vandaag (windstoten tot ${rond(stoten)} km/u) — zet losse spullen buiten vast.`);\n}\n\n// --- Regen versus drooghangweer ---\nconst natVandaag = (dag.maxKans != null && dag.maxKans >= 60) || dag.somRegen >= 1;\nif (natVandaag) {\n  const kansTekst = dag.maxKans != null ? `${rond(dag.maxKans)}% kans, ` : '';\n  regels.push(`🌧️ Vandaag regen (${kansTekst}${dag.somRegen.toFixed(1)} mm) — was ophangen is geen goed plan en neem een paraplu mee.`);\n} else if (dag.maxKans != null && dag.maxKans < 15 && dag.maxWind != null && dag.maxWind >= 10 && dag.maxTemp != null && dag.maxTemp >= 15) {\n  regels.push(`🧺 Mooi drooghangweer vandaag (${rond(dag.maxTemp)}°C, ${rond(dag.maxWind)} km/u wind en vrijwel geen kans op regen).`);\n}\n\n// --- Warmte en terrasweer ---\nconst maxTemp = dagWaarde('temperature_2m_max', iVandaag);\nconst zon = dagWaarde('sunshine_duration', iVandaag); // in seconden\nif (maxTemp != null && maxTemp >= 30) {\n  regels.push(`🥵 Tropisch warm vandaag (${rond(maxTemp)}°C) — zonwering dicht en genoeg drinken.`);\n} else if (maxTemp != null && maxTemp >= 27) {\n  regels.push(`🌡️ Warm vandaag (${rond(maxTemp)}°C) — houd de zon buiten en drink genoeg.`);\n} else if (maxTemp != null && maxTemp >= 21 && !natVandaag && zon != null && zon >= 5 * 3600) {\n  regels.push(`☀️ Terrasweer vandaag (${rond(maxTemp)}°C en droog).`);\n}\nconst uv = dagWaarde('uv_index_max', iVandaag);\nif (uv != null && uv >= 7) {\n  regels.push(`🧴 Hoge UV-index (${rond(uv)}) — zonnebrand aan als je langer buiten bent.`);\n}\n\n// --- Morgen, alleen als het duidelijk anders wordt dan vandaag ---\nconst natMorgen = (dagMorgen.maxKans != null && dagMorgen.maxKans >= 70) || dagMorgen.somRegen >= 3;\nif (natMorgen && !natVandaag) {\n  regels.push(`☔ Morgen wordt het nat (${dagMorgen.somRegen.toFixed(1)} mm) — doe de was liever vandaag.`);\n}\n\n// --- Weekendvooruitblik, alleen op donderdag en vrijdag ---\nif (nu.weekday === 4 || nu.weekday === 5) {\n  const mooi = [];\n  for (const [naam, weekdag] of [['zaterdag', 6], ['zondag', 7]]) {\n    const datum = nu.plus({ days: weekdag - nu.weekday }).toFormat('yyyy-MM-dd');\n    const i = dagIndex(datum);\n    const t = dagWaarde('temperature_2m_max', i);\n    const regen = dagWaarde('precipitation_sum', i);\n    const zonUren = dagWaarde('sunshine_duration', i);\n    if (t != null && t >= 20 && (regen == null || regen < 1) && (zonUren == null || zonUren >= 4 * 3600)) {\n      mooi.push(`${naam} ${rond(t)}°C`);\n    }\n  }\n  if (mooi.length) {\n    regels.push(`☀️ Terrasweer dit weekend: ${mooi.join(' en ')} — droog en zonnig.`);\n  }\n}\n\nif (!regels.length) { return []; } // niets bijzonders: geen bericht\n\nconst kop = plaats ? `🌦️ Weer in ${plaats}` : '🌦️ Weer vandaag';\nreturn [{ json: { chatId, tekst: `${kop}\\n\\n${regels.join('\\n')}` } }];"
+      }
+    },
+    {
+      "id": "h1000000-0000-4000-8000-000000000005",
+      "name": "Stuur weerbericht",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [-240, 0],
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.tekst }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "VERVANG_NA_IMPORT",
+          "name": "Telegram Huishoudbot"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Elke ochtend": {
+      "main": [[{"node": "Instellingen weer", "type": "main", "index": 0}]]
+    },
+    "Instellingen weer": {
+      "main": [[{"node": "Weer ophalen", "type": "main", "index": 0}]]
+    },
+    "Weer ophalen": {
+      "main": [[{"node": "Bepaal waarschuwingen", "type": "main", "index": 0}]]
+    },
+    "Bepaal waarschuwingen": {
+      "main": [[{"node": "Stuur weerbericht", "type": "main", "index": 0}]]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}
