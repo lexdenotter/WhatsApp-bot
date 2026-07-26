@@ -5,7 +5,7 @@ Een chatbot voor het huishouden, voor twee personen in een Telegram-groepschat. 
 - houdt **gedeelde lijstjes** bij (boodschappen, klusjes, …) in gewoon Nederlands: *"zet melk en eieren op de boodschappenlijst"*, *"streep melk maar door"*;
 - helpt **bedenken wat je gaat eten**, rekening houdend met jullie voorkeuren en wat je recent al at;
 - haalt wekelijks de **aanbiedingen van Albert Heijn en Plus** op, meldt welke van jullie vaste boodschappen in de aanbieding zijn en gebruikt de aanbiedingen bij maaltijdsuggesties;
-- onthoudt **herinneringen** (eenmalig of herhalend) en stuurt die op het juiste moment proactief in de groep: *"herinner ons elke dinsdag om 19:00 aan stofzuigen"*.
+- onthoudt **herinneringen** en stuurt die op het juiste moment proactief in de groep — eenmalig of in elk ritme dat je in gewone taal noemt: *"herinner ons elke dinsdag om 19:00 aan stofzuigen"*, *"elke eerste donderdag van de maand"*, *"elke werkdag om 7:30"*, *"over 10 minuten"*.
 
 Alles draait gratis: de officiële Telegram Bot API kost niets, Google Gemini heeft een ruime gratis tier (±1.500 requests/dag — zat voor twee personen), n8n (community-editie) is gratis en zelf te hosten, en we draaien hem op een **Oracle Cloud Always Free VM** (blijvend gratis) met een gratis **DuckDNS**-subdomein.
 
@@ -145,6 +145,8 @@ In n8n: **Data tables** (linkermenu) → maak deze vijf tabellen aan, alle kolom
 | `aanbiedingen` | `winkel`, `product`, `prijs`, `korting`, `geldig_tot`, `opgehaald_op` |
 | `herinneringen` | `tekst`, `volgende_op`, `herhaling`, `chat_id`, `toegevoegd_door` |
 
+> **Hoe de herhaling van een herinnering wordt opgeslagen.** De kolom `herhaling` is leeg bij een eenmalige herinnering en bevat anders een compacte code die de bot zelf uit je bericht haalt: `elke:10:minuten` / `elke:2:weken` (elk aantal + minuten, uren, dagen, weken, maanden of jaren), `weekdag:1:4` (elke eerste donderdag van de maand; 1..5 of `laatste`, dag 1 = maandag t/m 7 = zondag), `maanddag:15` of `maanddag:laatste`, en `dagen:1,3,5` (vaste weekdagen, hier ma/wo/vr). De checker rekent daar zelf het volgende moment uit — geen AI en dus geen API-kosten. Kortste herhaling is 5 minuten, omdat de checker elke 5 minuten kijkt.
+
 ### Stap 6 — Workflows importeren
 
 **Aanbevolen: via de CLI** (behoudt de onderlinge verwijzingen tussen de workflows):
@@ -187,6 +189,10 @@ In de groep (noem de bot met `@botnaam`, of antwoord op een bericht van de bot):
 @huishoudbot we eten vanavond lasagne
 @huishoudbot is er kip in de aanbieding?
 @huishoudbot herinner ons elke dinsdag om 19:00 aan stofzuigen
+@huishoudbot herinner ons elke eerste donderdag van de maand aan de plantjes water geven
+@huishoudbot herinner me elke werkdag om 7:30 aan mijn pillen
+@huishoudbot herinner ons op de laatste dag van de maand aan de meterstanden
+@huishoudbot herinner me over 10 minuten aan de oven
 @huishoudbot welke herinneringen staan er?
 @huishoudbot verwijder de herinnering voor stofzuigen
 ```
