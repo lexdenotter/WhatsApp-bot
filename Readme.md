@@ -58,7 +58,7 @@ Bestanden in deze repo:
 | `workflows/tool-herinneringen.json` | Sub-workflow (tool): herinneringen aanmaken/tonen/verwijderen |
 | `workflows/aanbiedingen-ophalen.json` | Wekelijkse workflow: AH + Plus ophalen |
 | `workflows/herinneringen-checker.json` | Elke 5 minuten: vervallen herinneringen versturen |
-| `workflows/weer-waarschuwingen.json` | Elke ochtend: praktische weertips (Open-Meteo) |
+| `workflows/weer-waarschuwingen.json` | Elke ochtend: praktische weertips (Open-Meteo). Heb je al een eigen ochtendbericht? Zie het kader hieronder |
 
 ---
 
@@ -204,9 +204,11 @@ In de groep (noem de bot met `@botnaam`, of antwoord op een bericht van de bot):
 @huishoudbot verwijder de herinnering voor stofzuigen
 ```
 
-Draai de workflow **"aanbiedingen ophalen"** één keer handmatig (*Execute workflow*) zodat de aanbiedingen-tabel gevuld is; daarna gebeurt dat automatisch elke maandag om 08:00. Activeer ook de workflows **"Huishoudbot — herinneringen checker"** en **"Huishoudbot — weerwaarschuwingen"** (schuifje rechtsboven), zodat herinneringen en weertips daadwerkelijk verstuurd worden.
+Draai de workflow **"aanbiedingen ophalen"** één keer handmatig (*Execute workflow*) zodat de aanbiedingen-tabel gevuld is; daarna gebeurt dat automatisch elke maandag om 08:00. Activeer ook **"Huishoudbot — herinneringen checker"** (schuifje rechtsboven), zodat herinneringen daadwerkelijk verstuurd worden, en **"Huishoudbot — weerwaarschuwingen"** als je nog geen eigen ochtendbericht hebt.
 
 > **Over de weertips.** Je krijgt alleen een bericht als er iets te melden is: nachtvorst, regen (dus geen was ophangen), harde wind, hitte, onweer, sneeuw, hoge UV, mooi drooghangweer of terrasweer. Op een doorsnee bewolkte dag blijft het stil. De weekendvooruitblik komt alleen op donderdag en vrijdag, zodat je die niet vijf keer achter elkaar krijgt. Draai de workflow handmatig om te zien wat hij vandaag zou sturen — komt er niets uit, dan is er simpelweg niets bijzonders aan het weer.
+>
+> **Heb je al een eigen ochtendbericht?** Activeer deze workflow dan **niet**, anders krijg je twee berichten. De hele tips-logica zit in één functie `weerTips(w, nu)` in de Code-node *Bepaal waarschuwingen*: kopieer die functie naar de Code-node van je eigen ochtendbericht, roep hem aan met de Open-Meteo-respons en `$now.setZone('Europe/Amsterdam')`, en plak de teruggegeven regels onderaan je bericht. Zorg dat je API-aanroep dezelfde `daily`- en `hourly`-velden opvraagt als de node *Weer ophalen* hier (de functie controleert dat en geeft anders een duidelijke foutmelding).
 
 ---
 
