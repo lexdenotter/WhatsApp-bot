@@ -49,7 +49,7 @@
           "cachedResultName": "aanbiedingen"
         },
         "returnAll": true,
-        "matchType": "ALL_CONDITIONS",
+        "matchType": "allConditions",
         "filters": {
           "conditions": []
         },

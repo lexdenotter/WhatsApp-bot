@@ -21,6 +21,9 @@ import tempfile
 
 WORKFLOWS = pathlib.Path(__file__).resolve().parent.parent / 'workflows'
 SCHRIJFACTIES = {'insert', 'update', 'upsert', 'deleteRows'}
+# De letterlijke waarden uit n8n (packages/nodes-base/nodes/DataTable/common/constants.ts).
+# Let op: dit zijn de wáárden, niet de namen ANY_CONDITION / ALL_CONDITIONS van de constanten.
+MATCH_TYPES = {'anyCondition', 'allConditions'}
 
 fouten: list[str] = []
 waarschuwingen: list[str] = []
@@ -73,12 +76,21 @@ def controleer(pad: pathlib.Path) -> None:
             continue
         operatie = params.get('operation')
 
-        if operatie == 'get' and 'matchType' not in params:
-            fouten.append(
-                f'{naam} / {node["name"]}: leesnode zonder matchType. Zonder deze waarde valt '
-                'n8n terug op ANY_CONDITION en levert een filter zonder voorwaarden nul rijen op. '
-                'Zet matchType op "ALL_CONDITIONS".'
-            )
+        if operatie == 'get':
+            match_type = params.get('matchType')
+            if match_type is None:
+                fouten.append(
+                    f'{naam} / {node["name"]}: leesnode zonder matchType. Zonder deze waarde valt '
+                    "n8n terug op 'anyCondition' en levert een filter zonder voorwaarden nul rijen "
+                    "op. Zet matchType op 'allConditions'."
+                )
+            elif match_type not in MATCH_TYPES:
+                fouten.append(
+                    f'{naam} / {node["name"]}: matchType {match_type!r} bestaat niet. n8n accepteert '
+                    f'alleen {" en ".join(repr(m) for m in sorted(MATCH_TYPES))} en gooit bij elke '
+                    'andere waarde "unexpected match type". Let op de precieze schrijfwijze: dit is '
+                    'de waarde van de constante, niet de naam ervan.'
+                )
 
         if operatie in SCHRIJFACTIES and node.get('onError') == 'continueRegularOutput':
             # Ergens ná deze node moet een Code-node de mislukking oppikken. Dat hoeft niet de

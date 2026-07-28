@@ -233,7 +233,7 @@
           "cachedResultName": "maaltijden"
         },
         "returnAll": true,
-        "matchType": "ALL_CONDITIONS",
+        "matchType": "allConditions",
         "filters": {
           "conditions": []
         },
@@ -330,7 +330,7 @@
           "cachedResultName": "voorkeuren"
         },
         "returnAll": true,
-        "matchType": "ALL_CONDITIONS",
+        "matchType": "allConditions",
         "filters": {
           "conditions": []
         },

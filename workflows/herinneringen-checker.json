@@ -48,7 +48,7 @@
           "cachedResultName": "herinneringen"
         },
         "returnAll": true,
-        "matchType": "ALL_CONDITIONS",
+        "matchType": "allConditions",
         "filters": {
           "conditions": []
         },

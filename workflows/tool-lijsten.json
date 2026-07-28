@@ -270,7 +270,7 @@
           "cachedResultName": "items"
         },
         "returnAll": true,
-        "matchType": "ALL_CONDITIONS",
+        "matchType": "allConditions",
         "filters": {
           "conditions": [
             {
@@ -317,7 +317,7 @@
           "cachedResultName": "items"
         },
         "returnAll": true,
-        "matchType": "ALL_CONDITIONS",
+        "matchType": "allConditions",
         "filters": {
           "conditions": []
         },
@@ -358,7 +358,7 @@
           "cachedResultName": "items"
         },
         "returnAll": true,
-        "matchType": "ALL_CONDITIONS",
+        "matchType": "allConditions",
         "filters": {
           "conditions": [
             {
@@ -460,7 +460,7 @@
           "cachedResultName": "items"
         },
         "returnAll": true,
-        "matchType": "ALL_CONDITIONS",
+        "matchType": "allConditions",
         "filters": {
           "conditions": [
             {
