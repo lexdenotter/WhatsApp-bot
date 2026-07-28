@@ -112,7 +112,7 @@
           "conditions": [
             {
               "id": "cond1",
-              "leftValue": "={{ $json.herhaalt }}",
+              "leftValue": "={{ $('Bepaal vervallen').item.json.herhaalt }}",
               "rightValue": true,
               "operator": {
                 "type": "boolean",
@@ -150,14 +150,14 @@
             {
               "keyName": "id",
               "condition": "eq",
-              "keyValue": "={{ $json.id }}"
+              "keyValue": "={{ $('Bepaal vervallen').item.json.id }}"
             }
           ]
         },
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "volgende_op": "={{ $json.nieuweVolgendeOp }}"
+            "volgende_op": "={{ $('Bepaal vervallen').item.json.nieuweVolgendeOp }}"
           },
           "matchingColumns": [],
           "schema": [],
@@ -192,7 +192,7 @@
             {
               "keyName": "id",
               "condition": "eq",
-              "keyValue": "={{ $json.id }}"
+              "keyValue": "={{ $('Bepaal vervallen').item.json.id }}"
             }
           ]
         },

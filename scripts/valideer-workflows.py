@@ -12,6 +12,8 @@ voortkomen uit fouten die we echt hebben gehad:
 * Een schrijfnode met 'doorgaan bij fout' geeft bij een mislukking een item met een
   'error'-veld door. Controleert de volgende Code-node dat niet, dan meldt de bot
   succes terwijl er niets is opgeslagen.
+* Een Telegram-node vervangt $json door het antwoord van de Telegram-API. Nodes die
+  daarna nog $json.iets lezen krijgen undefined, ook als er nog een IF tussen zit.
 """
 import json
 import pathlib
@@ -24,6 +26,11 @@ SCHRIJFACTIES = {'insert', 'update', 'upsert', 'deleteRows'}
 # De letterlijke waarden uit n8n (packages/nodes-base/nodes/DataTable/common/constants.ts).
 # Let op: dit zijn de wáárden, niet de namen ANY_CONDITION / ALL_CONDITIONS van de constanten.
 MATCH_TYPES = {'anyCondition', 'allConditions'}
+# Nodes die items onveranderd doorgeven; $json komt dan van verder stroomopwaarts.
+DOORGEEFNODES = {
+    'n8n-nodes-base.if', 'n8n-nodes-base.switch',
+    'n8n-nodes-base.filter', 'n8n-nodes-base.noOp',
+}
 
 fouten: list[str] = []
 waarschuwingen: list[str] = []
@@ -51,11 +58,45 @@ def controleer(pad: pathlib.Path) -> None:
 
     # Welke node volgt op welke, zodat we schrijfacties met hun bevestiging kunnen koppelen.
     volgt_op: dict[str, list[str]] = {}
+    komt_na: dict[str, list[str]] = {}
     for bron, verbindingen in wf.get('connections', {}).items():
         for uitgangen in verbindingen.values():
             for tak in uitgangen:
                 for verbinding in tak:
                     volgt_op.setdefault(bron, []).append(verbinding['node'])
+                    komt_na.setdefault(verbinding['node'], []).append(bron)
+
+    # Een Telegram-node vervangt $json door het antwoord van de Telegram-API. Wie daarna
+    # nog $json.iets leest, krijgt dus undefined; verwijs in dat geval expliciet naar de
+    # node waar het veld vandaan komt, bijvoorbeeld $('Bepaal vervallen').item.json.id
+    def databronnen(node_naam: str, gezien: set[str] | None = None) -> list[str]:
+        """Loopt stroomopwaarts door doorgeefnodes (IF, Switch, ...) tot de nodes die de
+        items daadwerkelijk vormen. Zo'n doorgeefnode geeft $json namelijk onveranderd door."""
+        if gezien is None:
+            gezien = set()
+        bronnen: list[str] = []
+        for voorganger in komt_na.get(node_naam, []):
+            if voorganger in gezien:
+                continue
+            gezien.add(voorganger)
+            if nodes.get(voorganger, {}).get('type') in DOORGEEFNODES:
+                bronnen.extend(databronnen(voorganger, gezien))
+            else:
+                bronnen.append(voorganger)
+        return bronnen
+
+    for node in wf.get('nodes', []):
+        telegram_bronnen = [b for b in databronnen(node['name'])
+                            if nodes.get(b, {}).get('type') == 'n8n-nodes-base.telegram']
+        if not telegram_bronnen:
+            continue
+        params = json.dumps(node.get('parameters', {}), ensure_ascii=False)
+        if '$json.' in params:
+            waarschuwingen.append(
+                f'{naam} / {node["name"]}: leest $json terwijl de items van de Telegram-node '
+                f'{telegram_bronnen[0]!r} komen, en die vervangt $json door het API-antwoord. '
+                "Verwijs expliciet naar de bronnode, bijv. $('Bepaal vervallen').item.json.id"
+            )
 
     for node in wf.get('nodes', []):
         params = node.get('parameters', {})
