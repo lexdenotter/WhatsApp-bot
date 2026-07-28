@@ -187,6 +187,41 @@
       }
     },
     {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "li1",
+              "leftValue": "={{ $json.items.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b1000000-0000-4000-8000-000000000014",
+      "name": "Items geldig?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -660,
+        -240
+      ],
+      "notesInFlow": true,
+      "notes": "Zonder items geen rij aanmaken"
+    },
+    {
       "id": "b1000000-0000-4000-8000-000000000004",
       "name": "Items uitsplitsen",
       "type": "n8n-nodes-base.code",
@@ -572,7 +607,7 @@
       "main": [
         [
           {
-            "node": "Items uitsplitsen",
+            "node": "Items geldig?",
             "type": "main",
             "index": 0
           }
@@ -718,6 +753,24 @@
         [
           {
             "node": "Bevestig verwijderen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Items geldig?": {
+      "main": [
+        [
+          {
+            "node": "Items uitsplitsen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Bevestig toevoegen",
             "type": "main",
             "index": 0
           }

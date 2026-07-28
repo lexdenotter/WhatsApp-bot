@@ -179,7 +179,7 @@
       "position": [140, 340],
       "parameters": {
         "name": "maaltijden",
-        "description": "Beheert de maaltijdhistorie en eetvoorkeuren. Acties: 'loggen' (sla op wat er gegeten wordt, met optionele datum jjjj-mm-dd), 'historie' (toon de laatst gegeten maaltijden — gebruik dit vóór je een suggestie doet), 'voorkeur_opslaan' (sla een blijvende eetvoorkeur op, met sleutel en waarde), 'voorkeuren' (toon alle opgeslagen voorkeuren).",
+        "description": "Beheert de maaltijdhistorie en eetvoorkeuren. Acties: 'loggen' (sla op wat er gegeten wordt, met optionele datum jjjj-mm-dd), 'historie' (toon de laatst gegeten maaltijden — gebruik dit vóór je een suggestie doet), 'verwijderen' (haal een verkeerd gelogde maaltijd weg; zonder datum wordt alleen de laatste keer dat dit gerecht gelogd is verwijderd), 'voorkeur_opslaan' (sla een blijvende eetvoorkeur op, met sleutel en waarde), 'voorkeuren' (toon alle opgeslagen voorkeuren).",
         "workflowId": {
           "__rl": true,
           "mode": "list",
@@ -189,9 +189,9 @@
         "workflowInputs": {
           "mappingMode": "defineBelow",
           "value": {
-            "actie": "={{ $fromAI('actie', 'Een van: loggen, historie, voorkeur_opslaan, voorkeuren', 'string') }}",
-            "gerecht": "={{ $fromAI('gerecht', 'Naam van het gerecht (alleen bij loggen)', 'string') }}",
-            "datum": "={{ $fromAI('datum', 'Datum jjjj-mm-dd (alleen bij loggen; leeg = vandaag)', 'string') }}",
+            "actie": "={{ $fromAI('actie', 'Een van: loggen, historie, verwijderen, voorkeur_opslaan, voorkeuren', 'string') }}",
+            "gerecht": "={{ $fromAI('gerecht', 'Naam van het gerecht (bij loggen en verwijderen)', 'string') }}",
+            "datum": "={{ $fromAI('datum', 'Datum jjjj-mm-dd (bij loggen leeg = vandaag; bij verwijderen leeg = de laatste keer dat dit gerecht gelogd is)', 'string') }}",
             "sleutel": "={{ $fromAI('sleutel', 'Korte naam van de voorkeur, bijv. allergie of doordeweeks (alleen bij voorkeur_opslaan)', 'string') }}",
             "waarde": "={{ $fromAI('waarde', 'De inhoud van de voorkeur, bijv. \"geen noten\" (alleen bij voorkeur_opslaan)', 'string') }}"
           },

@@ -3,7 +3,7 @@
 Een chatbot voor het huishouden, voor twee personen in een Telegram-groepschat. De bot:
 
 - houdt **gedeelde lijstjes** bij (boodschappen, klusjes, …) in gewoon Nederlands: *"zet melk en eieren op de boodschappenlijst"*, *"streep melk maar door"*;
-- helpt **bedenken wat je gaat eten**, rekening houdend met jullie voorkeuren en wat je recent al at;
+- helpt **bedenken wat je gaat eten**, rekening houdend met jullie voorkeuren en wat je recent al at, en haalt een verkeerd gelogde maaltijd er weer uit: *"we hebben toch geen pasta gegeten"*;
 - haalt wekelijks de **aanbiedingen van Albert Heijn en Plus** op, meldt welke van jullie vaste boodschappen in de aanbieding zijn en gebruikt de aanbiedingen bij maaltijdsuggesties;
 - geeft **praktische weertips** in plaats van een weerbericht: *"vannacht vorst — plantjes naar binnen"*, *"vandaag regen, was ophangen is geen goed plan"*, *"terrasweer dit weekend"*;
 - onthoudt **herinneringen** en stuurt die op het juiste moment proactief in de groep — eenmalig of in elk ritme dat je in gewone taal noemt: *"herinner ons elke dinsdag om 19:00 aan stofzuigen"*, *"elke eerste donderdag van de maand"*, *"elke werkdag om 7:30"*, *"over 10 minuten"*.
@@ -194,6 +194,7 @@ In de groep (noem de bot met `@botnaam`, of antwoord op een bericht van de bot):
 @huishoudbot melk is binnen
 @huishoudbot wat eten we vandaag? we willen max 30 minuten koken
 @huishoudbot we eten vanavond lasagne
+@huishoudbot we hebben toch geen lasagne gegeten, haal dat maar weg
 @huishoudbot is er kip in de aanbieding?
 @huishoudbot herinner ons elke dinsdag om 19:00 aan stofzuigen
 @huishoudbot herinner ons elke eerste donderdag van de maand aan de plantjes water geven
@@ -203,6 +204,8 @@ In de groep (noem de bot met `@botnaam`, of antwoord op een bericht van de bot):
 @huishoudbot welke herinneringen staan er?
 @huishoudbot verwijder de herinnering voor stofzuigen
 ```
+
+> **Een maaltijd weghalen.** Noem je geen datum, dan verdwijnt alleen de **laatste keer** dat dat gerecht gelogd is — niet je hele geschiedenis van pasta. Wil je een andere dag, noem die dan expliciet ("de lasagne van 12 juli"). De bot zoekt hoofdletterongevoelig en op deel van de naam, en zegt het eerlijk als hij niets vindt.
 
 Draai de workflow **"aanbiedingen ophalen"** één keer handmatig (*Execute workflow*) zodat de aanbiedingen-tabel gevuld is; daarna gebeurt dat automatisch elke maandag om 08:00. Activeer ook **"Huishoudbot — herinneringen checker"** (schuifje rechtsboven), zodat herinneringen daadwerkelijk verstuurd worden, en **"Huishoudbot — weerwaarschuwingen"** als je nog geen eigen ochtendbericht hebt.
 
@@ -274,6 +277,7 @@ Als het Gemini-dagquotum op is, krijg je een foutmelding in n8n; de volgende dag
 | Bot reageert helemaal niet | Is de workflow "Huishoudbot" **actief**? Staat het juiste chat-id in `allowedChatIds`? Kijk in n8n bij *Executions* wat er gebeurt |
 | Fout in een Data Table-node | Open de node en controleer of de juiste tabel geselecteerd is en de kolomnamen overeenkomen met stap 5 |
 | Een tool vindt niets, terwijl er wel rijen in de tabel staan | Open de lees-node en zet **Must Match** op **All Conditions** (via de dropdown, niet door de JSON te typen: de geldige waarden zijn `anyCondition` en `allConditions`). Staat die op *Any Condition* (de standaard) én zijn er geen voorwaarden, dan matcht "één van nul voorwaarden" niets en krijg je stil nul rijen. `python3 scripts/valideer-workflows.py` spoort dit op |
+| Afvinken of verwijderen doet niets, en in *Executions* is het filterveld van die node leeg | Open je de node terwijl er nog geen tabel geselecteerd is, dan kan n8n de kolomlijst niet ophalen en wist het de gekozen kolomnaam. Bij afvinken/verwijderen hoort dat de systeemkolom **id** te zijn; kies eerst de tabel, dan `id` in het filter. Doe dat in deze volgorde, anders is de kolom bij de volgende keer opslaan weer weg |
 | De bot zegt "genoteerd", maar er staat niets in de tabel | Dan is de schrijf-node mislukt en ging de flow door. Kijk in *Executions* bij die node; meestal is de tabel niet geselecteerd na een import. De bevestigingen controleren dit sinds kort en melden het eerlijk |
 | "Tool: …"-node geeft een fout over de workflow | De sub-workflow-verwijzing klopt niet (gebeurt bij import via de UI) → open de node en selecteer de juiste sub-workflow |
 | Aanbiedingen ophalen mislukt | Zie de foutmelding in de groep + *Executions*; waarschijnlijk is de sitestructuur gewijzigd → pas de parse-Code-node aan |

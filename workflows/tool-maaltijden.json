@@ -47,7 +47,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "const j = $input.first().json;\nconst actie = String(j.actie || '').toLowerCase().trim();\nconst gerecht = String(j.gerecht || '').trim();\nlet datum = String(j.datum || '').trim();\nif (!/^\\d{4}-\\d{2}-\\d{2}$/.test(datum)) {\n  datum = new Date().toISOString().slice(0, 10);\n}\nconst sleutel = String(j.sleutel || '').toLowerCase().trim();\nconst waarde = String(j.waarde || '').trim();\nreturn [{ json: { actie, gerecht, datum, sleutel, waarde } }];"
+        "jsCode": "const j = $input.first().json;\nconst actie = String(j.actie || '').toLowerCase().trim();\nconst gerecht = String(j.gerecht || '').trim();\nlet datum = String(j.datum || '').trim();\nconst datumOpgegeven = /^\\d{4}-\\d{2}-\\d{2}$/.test(datum);\nif (!datumOpgegeven) {\n  datum = new Date().toISOString().slice(0, 10);\n}\nconst sleutel = String(j.sleutel || '').toLowerCase().trim();\nconst waarde = String(j.waarde || '').trim();\nreturn [{ json: { actie, gerecht, datum, datumOpgegeven, sleutel, waarde } }];"
       }
     },
     {
@@ -157,6 +157,30 @@
               },
               "renameOutput": true,
               "outputKey": "voorkeuren"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "r5",
+                    "leftValue": "={{ $json.actie }}",
+                    "rightValue": "verwijderen",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "verwijderen"
             }
           ]
         },
@@ -351,6 +375,91 @@
       }
     },
     {
+      "id": "c1000000-0000-4000-8000-000000000012",
+      "name": "Haal maaltijden op (verwijderen)",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        -520,
+        300
+      ],
+      "notesInFlow": true,
+      "notes": "Selecteer hier de tabel 'maaltijden'",
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "maaltijden"
+        },
+        "returnAll": true,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": []
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c1000000-0000-4000-8000-000000000013",
+      "name": "Zoek maaltijd",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -300,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const invoer = $('Normaliseren').first().json;\nconst rijen = $input.all().map(i => i.json).filter(r => r && r.gerecht);\nconst gezocht = String(invoer.gerecht || '').toLowerCase().trim();\nif (!gezocht) {\n  return [{ json: { id: '', geenMatch: true, melding: 'Geef aan welke maaltijd verwijderd moet worden.' } }];\n}\nlet matches = rijen.filter(r => {\n  const g = String(r.gerecht).toLowerCase();\n  return g.includes(gezocht) || gezocht.includes(g);\n});\n// Is er een datum gevraagd, dan alleen die dag. Anders niet de hele geschiedenis wissen,\n// maar alleen de laatste keer dat dit gerecht gelogd is — dat is wat je bedoelt als je\n// zegt 'haal de pasta weg'.\nif (invoer.datumOpgegeven) {\n  matches = matches.filter(r => String(r.gegeten_op) === invoer.datum);\n} else if (matches.length > 1) {\n  matches.sort((a, b) => String(b.gegeten_op).localeCompare(String(a.gegeten_op)));\n  matches = [matches[0]];\n}\nif (!matches.length) {\n  const erbij = invoer.datumOpgegeven ? ` op ${invoer.datum}` : '';\n  return [{ json: { id: '', geenMatch: true, melding: `Geen maaltijd gevonden die lijkt op '${invoer.gerecht}'${erbij}.` } }];\n}\nreturn matches.map(r => ({ json: { id: r.id, gerecht: r.gerecht, gegeten_op: r.gegeten_op } }));\n"
+      }
+    },
+    {
+      "id": "c1000000-0000-4000-8000-000000000014",
+      "name": "Maaltijd verwijderen",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        300
+      ],
+      "notesInFlow": true,
+      "notes": "Selecteer hier de tabel 'maaltijden'",
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "operation": "deleteRows",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "maaltijden"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "keyValue": "={{ $json.id }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c1000000-0000-4000-8000-000000000015",
+      "name": "Bevestig verwijderen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        140,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// Controleer eerst of de schrijfactie hierboven wel gelukt is: die node gaat bij een\n// fout gewoon door, dus zonder deze check zou hier succes gemeld worden terwijl er niets\n// is opgeslagen.\nconst schrijfUitvoer = $input.all().map(i => i.json);\nif (schrijfUitvoer.length > 0 && schrijfUitvoer[0] && schrijfUitvoer[0].error != null) {\n  return [{ json: { resultaat: 'Het verwijderen van de maaltijd is niet gelukt.' } }];\n}\nconst gevonden = $('Zoek maaltijd').all().map(i => i.json);\nif (gevonden.length && gevonden[0].geenMatch) {\n  return [{ json: { resultaat: gevonden[0].melding } }];\n}\nconst regels = gevonden.map(g => `${g.gerecht} (${g.gegeten_op})`);\nreturn [{ json: { resultaat: `Verwijderd: ${regels.join(', ')}` } }];\n"
+      }
+    },
+    {
       "id": "c1000000-0000-4000-8000-00000000000c",
       "name": "Onbekende actie",
       "type": "n8n-nodes-base.code",
@@ -419,6 +528,13 @@
         ],
         [
           {
+            "node": "Haal maaltijden op (verwijderen)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
             "node": "Onbekende actie",
             "type": "main",
             "index": 0
@@ -464,6 +580,39 @@
         [
           {
             "node": "Toon voorkeuren",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Haal maaltijden op (verwijderen)": {
+      "main": [
+        [
+          {
+            "node": "Zoek maaltijd",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Zoek maaltijd": {
+      "main": [
+        [
+          {
+            "node": "Maaltijd verwijderen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Maaltijd verwijderen": {
+      "main": [
+        [
+          {
+            "node": "Bevestig verwijderen",
             "type": "main",
             "index": 0
           }
