@@ -84,7 +84,10 @@
         "options": {
           "timeout": 30000
         }
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
     },
     {
       "id": "h1000000-0000-4000-8000-000000000004",
@@ -120,7 +123,10 @@
           "id": "VERVANG_NA_IMPORT",
           "name": "Telegram Huishoudbot"
         }
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
     }
   ],
   "connections": {

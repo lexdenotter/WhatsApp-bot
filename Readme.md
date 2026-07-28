@@ -220,6 +220,37 @@ Draai de workflow **"aanbiedingen ophalen"** één keer handmatig (*Execute work
 
 Het **weekbericht** meldt hoeveel aanbiedingen er zijn opgehaald en welke producten die jullie vaak kopen (2+ keer op de boodschappenlijst gestaan) nu in de aanbieding zijn. Bij *"wat eten we deze week?"* betrekt de bot de aanbiedingen bij zijn recepten.
 
+## Robuust blijven als een node faalt
+
+Standaard stopt n8n een hele uitvoering zodra één node een fout geeft. Bij een dagelijks bericht is dat vervelend: valt de agenda-koppeling of een API even weg, dan krijg je die ochtend *helemaal niets* — ook niet de delen die wél werkten. Drie instellingen per node (tabblad **Settings** in de node) voorkomen dat:
+
+| Instelling | Wat het doet | Waar zinvol |
+|---|---|---|
+| **Retry On Fail** (bijv. 3 pogingen, 5s ertussen) | Probeert het opnieuw bij een hapering | Alles wat het netwerk op gaat: API's, agenda's, Telegram |
+| **On Error → Continue** | Bij een blijvende fout gaat de flow verder; de node geeft een item met een `error`-veld door | Bronnen die je kunt missen (één van meerdere agenda's, het weer) |
+| **Always Output Data** | Stuurt altijd iets uit, ook bij geen resultaat | Zodat volgende nodes niet stilvallen op een lege tak |
+
+Dat alleen is niet genoeg: de Code-node die het bericht opbouwt moet er dan ook tegen kunnen. Het patroon dat we daarvoor gebruiken:
+
+```js
+// null = node niet uitgevoerd; een item met .error = node ging met een fout door
+function veiligItems(naam) {
+  try { const i = $items(naam); return Array.isArray(i) ? i.map(x => x.json) : null; }
+  catch (e) { return null; }
+}
+function isMislukt(items) {
+  return items === null || (items.length > 0 && items[0] && items[0].error != null);
+}
+```
+
+Lees elke bron **apart** uit met deze twee helpers, houd bij wat niet lukte, en bouw het bericht op uit wat je wél hebt. Zet er tot slot een regel onder met wat er misging — stil degraderen is verwarrender dan een expliciete melding:
+
+```
+⚠️ Niet gelukt: agenda van Ri, weerbericht. Kijk in n8n bij Executions wat er misging.
+```
+
+Zo komt het bericht altijd aan, zie je meteen wat er ontbreekt, en blijft een tijdelijke storing bij één bron een schoonheidsfoutje in plaats van een gemiste dag.
+
 ## Kosten & limieten
 
 | Onderdeel | Kosten |
