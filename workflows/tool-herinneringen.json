@@ -11,16 +11,31 @@
       "name": "Aangeroepen als tool",
       "type": "n8n-nodes-base.executeWorkflowTrigger",
       "typeVersion": 1.1,
-      "position": [-1200, 0],
+      "position": [
+        -1200,
+        0
+      ],
       "parameters": {
         "workflowInputs": {
           "values": [
-            {"name": "actie"},
-            {"name": "tekst"},
-            {"name": "eerste_keer"},
-            {"name": "herhaling"},
-            {"name": "chat_id"},
-            {"name": "afzender"}
+            {
+              "name": "actie"
+            },
+            {
+              "name": "tekst"
+            },
+            {
+              "name": "eerste_keer"
+            },
+            {
+              "name": "herhaling"
+            },
+            {
+              "name": "chat_id"
+            },
+            {
+              "name": "afzender"
+            }
           ]
         }
       }
@@ -30,7 +45,10 @@
       "name": "Normaliseren",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-980, 0],
+      "position": [
+        -980,
+        0
+      ],
       "parameters": {
         "jsCode": "// Zet de invoer van de agent om naar een concreet eerste moment (volgende_op) en een\n// herhalingsspec. Ondersteunde herhalingen (kolom 'herhaling' in de Data Table):\n//   ''                    eenmalig\n//   elke:<n>:<eenheid>    eenheid = minuten|uren|dagen|weken|maanden|jaren\n//   weekdag:<n>:<dag>     n = 1..5 of 'laatste', dag = 1(ma) .. 7(zo)  -> bijv. eerste donderdag\n//   maanddag:<n>          n = 1..31 of 'laatste'\n//   dagen:<lijst>         bijv. 1,3,5 = maandag/woensdag/vrijdag\n// De oude waarden dagelijks/wekelijks/maandelijks blijven werken (als alias).\nconst ZONE = 'Europe/Amsterdam';\nconst DAGEN = ['', 'maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag', 'zondag'];\nconst MAANDEN = ['', 'januari', 'februari', 'maart', 'april', 'mei', 'juni', 'juli', 'augustus', 'september', 'oktober', 'november', 'december'];\nconst POSITIES = { '1': 'eerste', '2': 'tweede', '3': 'derde', '4': 'vierde', '5': 'vijfde', 'laatste': 'laatste' };\nconst EENHEDEN = { minuten: 'minutes', uren: 'hours', dagen: 'days', weken: 'weeks', maanden: 'months', jaren: 'years' };\nconst ALIAS = { dagelijks: 'elke:1:dagen', wekelijks: 'elke:1:weken', maandelijks: 'elke:1:maanden', jaarlijks: 'elke:1:jaren', werkdagen: 'dagen:1,2,3,4,5' };\n\nfunction parseSpec(ruw) {\n  const s = String(ruw || '').toLowerCase().trim();\n  if (!s) return null;\n  const t = ALIAS[s] || s;\n  let m;\n  if ((m = t.match(/^elke:(\\d+):(minuten|uren|dagen|weken|maanden|jaren)$/))) {\n    const n = parseInt(m[1], 10);\n    return n >= 1 ? { type: 'interval', aantal: n, eenheid: m[2] } : null;\n  }\n  if ((m = t.match(/^weekdag:([1-5]|laatste):([1-7])$/))) {\n    return { type: 'weekdag', positie: m[1] === 'laatste' ? 'laatste' : parseInt(m[1], 10), dag: parseInt(m[2], 10) };\n  }\n  if ((m = t.match(/^maanddag:(laatste|[1-9]|[12]\\d|3[01])$/))) {\n    return { type: 'maanddag', dag: m[1] === 'laatste' ? 'laatste' : parseInt(m[1], 10) };\n  }\n  if ((m = t.match(/^dagen:([1-7](?:,[1-7])*)$/))) {\n    return { type: 'dagen', dagen: [...new Set(m[1].split(',').map(Number))].sort() };\n  }\n  return null;\n}\nfunction specNaarTekst(spec) {\n  if (!spec) return '';\n  if (spec.type === 'interval') return 'elke:' + spec.aantal + ':' + spec.eenheid;\n  if (spec.type === 'weekdag') return 'weekdag:' + spec.positie + ':' + spec.dag;\n  if (spec.type === 'maanddag') return 'maanddag:' + spec.dag;\n  return 'dagen:' + spec.dagen.join(',');\n}\nfunction naarDt(str) {\n  const m = String(str || '').match(/^(\\d{4})-(\\d{2})-(\\d{2})[ T](\\d{2}):(\\d{2})/);\n  if (!m) return null;\n  return $now.setZone(ZONE).set({ year: +m[1], month: +m[2], day: +m[3], hour: +m[4], minute: +m[5], second: 0, millisecond: 0 });\n}\nfunction naarStr(dt) { return dt.toFormat('yyyy-MM-dd HH:mm'); }\nfunction ndeWeekdag(ref, positie, dag) {\n  if (positie === 'laatste') {\n    let d = ref.endOf('month').startOf('day');\n    while (d.weekday !== dag) d = d.minus({ days: 1 });\n    return d;\n  }\n  let d = ref.startOf('month');\n  while (d.weekday !== dag) d = d.plus({ days: 1 });\n  d = d.plus({ weeks: positie - 1 });\n  return d.hasSame(ref, 'month') ? d : null;\n}\nfunction pastBij(dt, spec) {\n  if (!spec) return true;\n  if (spec.type === 'dagen') return spec.dagen.includes(dt.weekday);\n  if (spec.type === 'weekdag') { const d = ndeWeekdag(dt, spec.positie, spec.dag); return !!d && d.hasSame(dt, 'day'); }\n  if (spec.type === 'maanddag') { const doel = spec.dag === 'laatste' ? dt.daysInMonth : Math.min(spec.dag, dt.daysInMonth); return dt.day === doel; }\n  return true;\n}\nfunction volgendeNa(dt, spec) {\n  if (!spec) return null;\n  if (spec.type === 'interval') return dt.plus({ [EENHEDEN[spec.eenheid]]: spec.aantal });\n  if (spec.type === 'dagen') {\n    let d = dt.plus({ days: 1 });\n    for (let i = 0; i < 14 && !spec.dagen.includes(d.weekday); i++) d = d.plus({ days: 1 });\n    return d;\n  }\n  for (let i = 0; i < 60; i++) {\n    const ref = dt.plus({ months: i });\n    let k = null;\n    if (spec.type === 'weekdag') {\n      const d = ndeWeekdag(ref, spec.positie, spec.dag);\n      if (d) k = d.set({ hour: dt.hour, minute: dt.minute, second: 0, millisecond: 0 });\n    } else {\n      const doel = spec.dag === 'laatste' ? ref.daysInMonth : Math.min(spec.dag, ref.daysInMonth);\n      k = ref.set({ day: doel, hour: dt.hour, minute: dt.minute, second: 0, millisecond: 0 });\n    }\n    if (k && k > dt) return k;\n  }\n  return null;\n}\nfunction eerstVolgende(dt, spec, nu) {\n  // Schuif door tot het moment in de toekomst ligt EN bij het patroon past.\n  let d = dt, n = 0;\n  while (d && (d <= nu || !pastBij(d, spec)) && n < 2000) { d = volgendeNa(d, spec); n++; }\n  return d;\n}\nfunction omschrijf(spec, dt) {\n  if (!spec) return dt ? DAGEN[dt.weekday] + ' ' + dt.toFormat('dd-MM-yyyy') + ' om ' + dt.toFormat('HH:mm') : 'eenmalig';\n  if (!dt) return 'herhalend (moment onbekend)';\n  const tijd = dt.toFormat('HH:mm');\n  if (spec.type === 'interval') {\n    const n = spec.aantal;\n    if (spec.eenheid === 'minuten') return n === 1 ? 'elke minuut' : 'elke ' + n + ' minuten';\n    if (spec.eenheid === 'uren') return n === 1 ? 'elk uur' : 'elke ' + n + ' uur';\n    if (spec.eenheid === 'dagen') return n === 1 ? 'elke dag om ' + tijd : 'elke ' + n + ' dagen om ' + tijd;\n    if (spec.eenheid === 'weken') return (n === 1 ? 'elke ' + DAGEN[dt.weekday] : 'elke ' + n + ' weken op ' + DAGEN[dt.weekday]) + ' om ' + tijd;\n    if (spec.eenheid === 'maanden') return (n === 1 ? 'elke maand' : 'elke ' + n + ' maanden') + ' op de ' + dt.day + 'e om ' + tijd;\n    return (n === 1 ? 'elk jaar' : 'elke ' + n + ' jaar') + ' op ' + dt.day + ' ' + MAANDEN[dt.month] + ' om ' + tijd;\n  }\n  if (spec.type === 'weekdag') return 'elke ' + POSITIES[spec.positie] + ' ' + DAGEN[spec.dag] + ' van de maand om ' + tijd;\n  if (spec.type === 'maanddag') return spec.dag === 'laatste' ? 'elke laatste dag van de maand om ' + tijd : 'elke maand op de ' + spec.dag + 'e om ' + tijd;\n  const werk = spec.dagen.length === 5 && spec.dagen.every((d, i) => d === i + 1);\n  return werk ? 'elke werkdag om ' + tijd : 'elke ' + spec.dagen.map(d => DAGEN[d]).join(', ') + ' om ' + tijd;\n}\n\nconst j = $input.first().json;\nconst nu = $now.setZone(ZONE).set({ second: 0, millisecond: 0 });\nconst actie = String(j.actie || '').toLowerCase().trim();\nconst tekst = String(j.tekst || '').trim();\nconst chatId = String(j.chat_id || '').trim();\nconst afzender = String(j.afzender || 'onbekend');\n\nlet spec = parseSpec(j.herhaling);\nlet opmerking = '';\nif (spec && spec.type === 'interval' && spec.eenheid === 'minuten' && spec.aantal < 5) {\n  spec = { type: 'interval', aantal: 5, eenheid: 'minuten' };\n  opmerking = ' (korter dan 5 minuten kan niet, want ik kijk elke 5 minuten)';\n}\n\n// eerste_keer verwachten we als 'jjjj-MM-dd' of 'jjjj-MM-dd uu:mm'. Ontbrekende tijd -> 09:00.\nconst ruw = String(j.eerste_keer || '').trim();\nconst m = ruw.match(/^(\\d{4}-\\d{2}-\\d{2})(?:[ T](\\d{2}:\\d{2}))?/);\nconst datumDeel = m ? m[1] : '';\nconst tijdDeel = (m && m[2]) ? m[2] : '09:00';\nconst uur = parseInt(tijdDeel.slice(0, 2), 10);\nconst minuut = parseInt(tijdDeel.slice(3, 5), 10);\n\nlet dt = null;\nif (spec && (spec.type === 'weekdag' || spec.type === 'maanddag' || spec.type === 'dagen')) {\n  // Bij een patroon rekenen we het eerste moment zelf uit; de agent hoeft alleen de tijd te geven.\n  const basis = nu.set({ hour: uur, minute: minuut });\n  dt = (pastBij(basis, spec) && basis > nu) ? basis : eerstVolgende(basis, spec, nu);\n} else if (datumDeel) {\n  dt = naarDt(datumDeel + ' ' + tijdDeel);\n  if (dt && spec && dt <= nu) dt = eerstVolgende(dt, spec, nu);\n} else if (spec && spec.type === 'interval') {\n  dt = volgendeNa(nu, spec);\n}\n\nreturn [{ json: {\n  actie,\n  tekst,\n  chatId,\n  afzender,\n  volgendeOp: dt ? naarStr(dt) : '',\n  herhaling: specNaarTekst(spec),\n  omschrijving: omschrijf(spec, dt) + opmerking,\n  geldig: !!(tekst && dt),\n} }];"
       }
@@ -40,16 +58,32 @@
       "name": "Welke actie?",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.2,
-      "position": [-760, 0],
+      "position": [
+        -760,
+        0
+      ],
       "parameters": {
         "rules": {
           "values": [
             {
               "conditions": {
-                "options": {"caseSensitive": false, "leftValue": "", "typeValidation": "loose", "version": 2},
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
                 "combinator": "and",
                 "conditions": [
-                  {"id": "r1", "leftValue": "={{ $json.actie }}", "rightValue": "toevoegen", "operator": {"type": "string", "operation": "equals"}}
+                  {
+                    "id": "r1",
+                    "leftValue": "={{ $json.actie }}",
+                    "rightValue": "toevoegen",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
                 ]
               },
               "renameOutput": true,
@@ -57,10 +91,23 @@
             },
             {
               "conditions": {
-                "options": {"caseSensitive": false, "leftValue": "", "typeValidation": "loose", "version": 2},
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
                 "combinator": "and",
                 "conditions": [
-                  {"id": "r2", "leftValue": "={{ $json.actie }}", "rightValue": "tonen", "operator": {"type": "string", "operation": "equals"}}
+                  {
+                    "id": "r2",
+                    "leftValue": "={{ $json.actie }}",
+                    "rightValue": "tonen",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
                 ]
               },
               "renameOutput": true,
@@ -68,10 +115,23 @@
             },
             {
               "conditions": {
-                "options": {"caseSensitive": false, "leftValue": "", "typeValidation": "loose", "version": 2},
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
                 "combinator": "and",
                 "conditions": [
-                  {"id": "r3", "leftValue": "={{ $json.actie }}", "rightValue": "verwijderen", "operator": {"type": "string", "operation": "equals"}}
+                  {
+                    "id": "r3",
+                    "leftValue": "={{ $json.actie }}",
+                    "rightValue": "verwijderen",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
                 ]
               },
               "renameOutput": true,
@@ -89,17 +149,29 @@
       "name": "Geldige invoer?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [-540, -300],
+      "position": [
+        -540,
+        -300
+      ],
       "parameters": {
         "conditions": {
-          "options": {"caseSensitive": true, "leftValue": "", "typeValidation": "loose", "version": 2},
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
           "combinator": "and",
           "conditions": [
             {
               "id": "g1",
               "leftValue": "={{ $json.geldig }}",
               "rightValue": true,
-              "operator": {"type": "boolean", "operation": "true", "singleValue": true}
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
             }
           ]
         },
@@ -111,7 +183,10 @@
       "name": "Herinnering opslaan",
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1,
-      "position": [-320, -380],
+      "position": [
+        -320,
+        -380
+      ],
       "notesInFlow": true,
       "notes": "Selecteer hier de tabel 'herinneringen'",
       "onError": "continueRegularOutput",
@@ -145,9 +220,12 @@
       "name": "Bevestig toevoegen",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-100, -380],
+      "position": [
+        -100,
+        -380
+      ],
       "parameters": {
-        "jsCode": "const inv = $('Normaliseren').first().json;\nreturn [{ json: { resultaat: `Genoteerd — ${inv.omschrijving} herinner ik jullie aan: ${inv.tekst}` } }];"
+        "jsCode": "// Controleer eerst of de schrijfactie hierboven wel gelukt is: die node gaat bij een\n// fout gewoon door, dus zonder deze check zou hier succes gemeld worden terwijl er niets\n// is opgeslagen.\nconst schrijfUitvoer = $input.all().map(i => i.json);\nif (schrijfUitvoer.length > 0 && schrijfUitvoer[0] && schrijfUitvoer[0].error != null) {\n  return [{ json: { resultaat: 'Het opslaan van de herinnering is niet gelukt. Controleer in n8n of de tabel \\'herinneringen\\' is geselecteerd in de node \\'Herinnering opslaan\\'.' } }];\n}\nconst inv = $('Normaliseren').first().json;\nreturn [{ json: { resultaat: `Genoteerd — ${inv.omschrijving} herinner ik jullie aan: ${inv.tekst}` } }];"
       }
     },
     {
@@ -155,7 +233,10 @@
       "name": "Ongeldige invoer",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-320, -220],
+      "position": [
+        -320,
+        -220
+      ],
       "parameters": {
         "jsCode": "const inv = $('Normaliseren').first().json;\nif (!inv.tekst) {\n  return [{ json: { resultaat: 'Waaraan moet ik jullie herinneren? Zeg bijvoorbeeld: \"herinner ons elke dinsdag om 19:00 aan stofzuigen\".' } }];\n}\nreturn [{ json: { resultaat: 'Ik kon er geen moment uit halen. Geef een datum/tijd of een herhaling, bijvoorbeeld \"morgen om 15:00\", \"elke 10 minuten\" of \"elke eerste donderdag van de maand\".' } }];"
       }
@@ -165,7 +246,10 @@
       "name": "Haal herinneringen op",
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1,
-      "position": [-540, 0],
+      "position": [
+        -540,
+        0
+      ],
       "notesInFlow": true,
       "notes": "Selecteer hier de tabel 'herinneringen'",
       "onError": "continueRegularOutput",
@@ -181,7 +265,11 @@
         "matchType": "ALL_CONDITIONS",
         "filters": {
           "conditions": [
-            {"keyName": "chat_id", "condition": "eq", "keyValue": "={{ $json.chatId }}"}
+            {
+              "keyName": "chat_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.chatId }}"
+            }
           ]
         },
         "options": {}
@@ -192,7 +280,10 @@
       "name": "Toon herinneringen",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-320, 0],
+      "position": [
+        -320,
+        0
+      ],
       "parameters": {
         "jsCode": "const ZONE = 'Europe/Amsterdam';\nconst DAGEN = ['', 'maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag', 'zondag'];\nconst MAANDEN = ['', 'januari', 'februari', 'maart', 'april', 'mei', 'juni', 'juli', 'augustus', 'september', 'oktober', 'november', 'december'];\nconst POSITIES = { '1': 'eerste', '2': 'tweede', '3': 'derde', '4': 'vierde', '5': 'vijfde', 'laatste': 'laatste' };\nconst ALIAS = { dagelijks: 'elke:1:dagen', wekelijks: 'elke:1:weken', maandelijks: 'elke:1:maanden', jaarlijks: 'elke:1:jaren', werkdagen: 'dagen:1,2,3,4,5' };\n\nfunction parseSpec(ruw) {\n  const s = String(ruw || '').toLowerCase().trim();\n  if (!s) return null;\n  const t = ALIAS[s] || s;\n  let m;\n  if ((m = t.match(/^elke:(\\d+):(minuten|uren|dagen|weken|maanden|jaren)$/))) {\n    const n = parseInt(m[1], 10);\n    return n >= 1 ? { type: 'interval', aantal: n, eenheid: m[2] } : null;\n  }\n  if ((m = t.match(/^weekdag:([1-5]|laatste):([1-7])$/))) {\n    return { type: 'weekdag', positie: m[1] === 'laatste' ? 'laatste' : parseInt(m[1], 10), dag: parseInt(m[2], 10) };\n  }\n  if ((m = t.match(/^maanddag:(laatste|[1-9]|[12]\\d|3[01])$/))) {\n    return { type: 'maanddag', dag: m[1] === 'laatste' ? 'laatste' : parseInt(m[1], 10) };\n  }\n  if ((m = t.match(/^dagen:([1-7](?:,[1-7])*)$/))) {\n    return { type: 'dagen', dagen: [...new Set(m[1].split(',').map(Number))].sort() };\n  }\n  return null;\n}\nfunction naarDt(str) {\n  const m = String(str || '').match(/^(\\d{4})-(\\d{2})-(\\d{2})[ T](\\d{2}):(\\d{2})/);\n  if (!m) return null;\n  return $now.setZone(ZONE).set({ year: +m[1], month: +m[2], day: +m[3], hour: +m[4], minute: +m[5], second: 0, millisecond: 0 });\n}\nfunction omschrijf(spec, dt) {\n  if (!spec) return dt ? DAGEN[dt.weekday] + ' ' + dt.toFormat('dd-MM-yyyy') + ' om ' + dt.toFormat('HH:mm') : 'eenmalig';\n  if (!dt) return 'herhalend (moment onbekend)';\n  const tijd = dt.toFormat('HH:mm');\n  if (spec.type === 'interval') {\n    const n = spec.aantal;\n    if (spec.eenheid === 'minuten') return n === 1 ? 'elke minuut' : 'elke ' + n + ' minuten';\n    if (spec.eenheid === 'uren') return n === 1 ? 'elk uur' : 'elke ' + n + ' uur';\n    if (spec.eenheid === 'dagen') return n === 1 ? 'elke dag om ' + tijd : 'elke ' + n + ' dagen om ' + tijd;\n    if (spec.eenheid === 'weken') return (n === 1 ? 'elke ' + DAGEN[dt.weekday] : 'elke ' + n + ' weken op ' + DAGEN[dt.weekday]) + ' om ' + tijd;\n    if (spec.eenheid === 'maanden') return (n === 1 ? 'elke maand' : 'elke ' + n + ' maanden') + ' op de ' + dt.day + 'e om ' + tijd;\n    return (n === 1 ? 'elk jaar' : 'elke ' + n + ' jaar') + ' op ' + dt.day + ' ' + MAANDEN[dt.month] + ' om ' + tijd;\n  }\n  if (spec.type === 'weekdag') return 'elke ' + POSITIES[spec.positie] + ' ' + DAGEN[spec.dag] + ' van de maand om ' + tijd;\n  if (spec.type === 'maanddag') return spec.dag === 'laatste' ? 'elke laatste dag van de maand om ' + tijd : 'elke maand op de ' + spec.dag + 'e om ' + tijd;\n  const werk = spec.dagen.length === 5 && spec.dagen.every((d, i) => d === i + 1);\n  return werk ? 'elke werkdag om ' + tijd : 'elke ' + spec.dagen.map(d => DAGEN[d]).join(', ') + ' om ' + tijd;\n}\n\nconst rijen = $input.all().map(i => i.json).filter(r => r && r.tekst);\nif (!rijen.length) {\n  return [{ json: { resultaat: 'Er staan nog geen herinneringen ingesteld.' } }];\n}\nrijen.sort((a, b) => String(a.volgende_op).localeCompare(String(b.volgende_op)));\nconst regels = rijen.map(r => {\n  const spec = parseSpec(r.herhaling);\n  const dt = naarDt(r.volgende_op);\n  let regel = '• ' + r.tekst + ' — ' + omschrijf(spec, dt);\n  if (spec && dt) regel += ' (eerstvolgend: ' + dt.toFormat('dd-MM') + ')';\n  return regel;\n});\nreturn [{ json: { resultaat: `Ingestelde herinneringen:\\n${regels.join('\\n')}` } }];"
       }
@@ -202,7 +293,10 @@
       "name": "Haal herinneringen op (verwijderen)",
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1,
-      "position": [-540, 220],
+      "position": [
+        -540,
+        220
+      ],
       "notesInFlow": true,
       "notes": "Selecteer hier de tabel 'herinneringen'",
       "onError": "continueRegularOutput",
@@ -218,7 +312,11 @@
         "matchType": "ALL_CONDITIONS",
         "filters": {
           "conditions": [
-            {"keyName": "chat_id", "condition": "eq", "keyValue": "={{ $json.chatId }}"}
+            {
+              "keyName": "chat_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.chatId }}"
+            }
           ]
         },
         "options": {}
@@ -229,7 +327,10 @@
       "name": "Zoek herinnering",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-320, 220],
+      "position": [
+        -320,
+        220
+      ],
       "parameters": {
         "jsCode": "const invoer = $('Normaliseren').first().json;\nconst rijen = $input.all().map(i => i.json).filter(r => r && r.tekst);\nconst gezocht = invoer.tekst.toLowerCase();\nif (!gezocht) {\n  return [{ json: { id: '', geenMatch: true, melding: 'Geef aan welke herinnering verwijderd moet worden.' } }];\n}\nconst matches = rijen.filter(r => {\n  const t = String(r.tekst).toLowerCase();\n  return t.includes(gezocht) || gezocht.includes(t);\n});\nif (!matches.length) {\n  return [{ json: { id: '', geenMatch: true, melding: `Geen herinnering gevonden die lijkt op '${invoer.tekst}'.` } }];\n}\nreturn matches.map(r => ({ json: { id: r.id, tekst: r.tekst } }));"
       }
@@ -239,7 +340,10 @@
       "name": "Verwijder herinnering",
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1,
-      "position": [-100, 220],
+      "position": [
+        -100,
+        220
+      ],
       "notesInFlow": true,
       "notes": "Selecteer hier de tabel 'herinneringen'",
       "onError": "continueRegularOutput",
@@ -253,7 +357,11 @@
         },
         "filters": {
           "conditions": [
-            {"keyName": "id", "condition": "eq", "keyValue": "={{ $json.id }}"}
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.id }}"
+            }
           ]
         },
         "options": {}
@@ -264,9 +372,12 @@
       "name": "Bevestig verwijderen",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [120, 220],
+      "position": [
+        120,
+        220
+      ],
       "parameters": {
-        "jsCode": "const gevonden = $('Zoek herinnering').all().map(i => i.json);\nif (gevonden.length && gevonden[0].geenMatch) {\n  return [{ json: { resultaat: gevonden[0].melding } }];\n}\nconst namen = gevonden.map(g => g.tekst);\nreturn [{ json: { resultaat: `Verwijderd: ${namen.join(', ')}` } }];"
+        "jsCode": "// Controleer eerst of de schrijfactie hierboven wel gelukt is: die node gaat bij een\n// fout gewoon door, dus zonder deze check zou hier succes gemeld worden terwijl er niets\n// is opgeslagen.\nconst schrijfUitvoer = $input.all().map(i => i.json);\nif (schrijfUitvoer.length > 0 && schrijfUitvoer[0] && schrijfUitvoer[0].error != null) {\n  return [{ json: { resultaat: 'Het verwijderen van de herinnering is niet gelukt.' } }];\n}\nconst gevonden = $('Zoek herinnering').all().map(i => i.json);\nif (gevonden.length && gevonden[0].geenMatch) {\n  return [{ json: { resultaat: gevonden[0].melding } }];\n}\nconst namen = gevonden.map(g => g.tekst);\nreturn [{ json: { resultaat: `Verwijderd: ${namen.join(', ')}` } }];"
       }
     },
     {
@@ -274,7 +385,10 @@
       "name": "Onbekende actie",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-540, 400],
+      "position": [
+        -540,
+        400
+      ],
       "parameters": {
         "jsCode": "const j = $input.first().json;\nreturn [{ json: { resultaat: `Onbekende actie '${j.actie}'. Geldige acties: toevoegen, tonen, verwijderen.` } }];"
       }
@@ -282,39 +396,131 @@
   ],
   "connections": {
     "Aangeroepen als tool": {
-      "main": [[{"node": "Normaliseren", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Normaliseren",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Normaliseren": {
-      "main": [[{"node": "Welke actie?", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Welke actie?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Welke actie?": {
       "main": [
-        [{"node": "Geldige invoer?", "type": "main", "index": 0}],
-        [{"node": "Haal herinneringen op", "type": "main", "index": 0}],
-        [{"node": "Haal herinneringen op (verwijderen)", "type": "main", "index": 0}],
-        [{"node": "Onbekende actie", "type": "main", "index": 0}]
+        [
+          {
+            "node": "Geldige invoer?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Haal herinneringen op",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Haal herinneringen op (verwijderen)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Onbekende actie",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Geldige invoer?": {
       "main": [
-        [{"node": "Herinnering opslaan", "type": "main", "index": 0}],
-        [{"node": "Ongeldige invoer", "type": "main", "index": 0}]
+        [
+          {
+            "node": "Herinnering opslaan",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ongeldige invoer",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Herinnering opslaan": {
-      "main": [[{"node": "Bevestig toevoegen", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Bevestig toevoegen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Haal herinneringen op": {
-      "main": [[{"node": "Toon herinneringen", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Toon herinneringen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Haal herinneringen op (verwijderen)": {
-      "main": [[{"node": "Zoek herinnering", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Zoek herinnering",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Zoek herinnering": {
-      "main": [[{"node": "Verwijder herinnering", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Verwijder herinnering",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Verwijder herinnering": {
-      "main": [[{"node": "Bevestig verwijderen", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Bevestig verwijderen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "pinData": {},

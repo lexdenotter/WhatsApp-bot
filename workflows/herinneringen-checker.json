@@ -11,7 +11,10 @@
       "name": "Elke 5 minuten",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [-1400, 0],
+      "position": [
+        -1400,
+        0
+      ],
       "parameters": {
         "rule": {
           "interval": [
@@ -28,7 +31,10 @@
       "name": "Haal alle herinneringen op",
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1,
-      "position": [-1180, 0],
+      "position": [
+        -1180,
+        0
+      ],
       "notesInFlow": true,
       "notes": "Selecteer hier de tabel 'herinneringen'",
       "alwaysOutputData": true,
@@ -42,6 +48,7 @@
           "cachedResultName": "herinneringen"
         },
         "returnAll": true,
+        "matchType": "ALL_CONDITIONS",
         "filters": {
           "conditions": []
         },
@@ -53,7 +60,10 @@
       "name": "Bepaal vervallen",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-960, 0],
+      "position": [
+        -960,
+        0
+      ],
       "parameters": {
         "jsCode": "// Zoekt herinneringen waarvan het moment (volgende_op) nu of eerder is en berekent\n// bij herhalende herinneringen meteen het volgende moment. Gemiste momenten worden\n// overgeslagen (bijv. als de server een tijd uit heeft gestaan): er gaat één bericht\n// uit en volgende_op springt naar het eerstvolgende moment in de toekomst.\n// Ondersteunde herhalingen in de kolom 'herhaling':\n//   elke:<n>:<eenheid> (minuten|uren|dagen|weken|maanden|jaren), weekdag:<n|laatste>:<1-7>,\n//   maanddag:<n|laatste>, dagen:<lijst>, plus de oude aliassen dagelijks/wekelijks/maandelijks.\nconst ZONE = 'Europe/Amsterdam';\nconst EENHEDEN = { minuten: 'minutes', uren: 'hours', dagen: 'days', weken: 'weeks', maanden: 'months', jaren: 'years' };\nconst ALIAS = { dagelijks: 'elke:1:dagen', wekelijks: 'elke:1:weken', maandelijks: 'elke:1:maanden', jaarlijks: 'elke:1:jaren', werkdagen: 'dagen:1,2,3,4,5' };\n\nfunction parseSpec(ruw) {\n  const s = String(ruw || '').toLowerCase().trim();\n  if (!s) return null;\n  const t = ALIAS[s] || s;\n  let m;\n  if ((m = t.match(/^elke:(\\d+):(minuten|uren|dagen|weken|maanden|jaren)$/))) {\n    const n = parseInt(m[1], 10);\n    return n >= 1 ? { type: 'interval', aantal: n, eenheid: m[2] } : null;\n  }\n  if ((m = t.match(/^weekdag:([1-5]|laatste):([1-7])$/))) {\n    return { type: 'weekdag', positie: m[1] === 'laatste' ? 'laatste' : parseInt(m[1], 10), dag: parseInt(m[2], 10) };\n  }\n  if ((m = t.match(/^maanddag:(laatste|[1-9]|[12]\\d|3[01])$/))) {\n    return { type: 'maanddag', dag: m[1] === 'laatste' ? 'laatste' : parseInt(m[1], 10) };\n  }\n  if ((m = t.match(/^dagen:([1-7](?:,[1-7])*)$/))) {\n    return { type: 'dagen', dagen: [...new Set(m[1].split(',').map(Number))].sort() };\n  }\n  return null;\n}\nfunction naarDt(str) {\n  const m = String(str || '').match(/^(\\d{4})-(\\d{2})-(\\d{2})[ T](\\d{2}):(\\d{2})/);\n  if (!m) return null;\n  return $now.setZone(ZONE).set({ year: +m[1], month: +m[2], day: +m[3], hour: +m[4], minute: +m[5], second: 0, millisecond: 0 });\n}\nfunction naarStr(dt) { return dt.toFormat('yyyy-MM-dd HH:mm'); }\nfunction ndeWeekdag(ref, positie, dag) {\n  if (positie === 'laatste') {\n    let d = ref.endOf('month').startOf('day');\n    while (d.weekday !== dag) d = d.minus({ days: 1 });\n    return d;\n  }\n  let d = ref.startOf('month');\n  while (d.weekday !== dag) d = d.plus({ days: 1 });\n  d = d.plus({ weeks: positie - 1 });\n  return d.hasSame(ref, 'month') ? d : null;\n}\nfunction volgendeNa(dt, spec) {\n  if (!spec) return null;\n  if (spec.type === 'interval') return dt.plus({ [EENHEDEN[spec.eenheid]]: spec.aantal });\n  if (spec.type === 'dagen') {\n    let d = dt.plus({ days: 1 });\n    for (let i = 0; i < 14 && !spec.dagen.includes(d.weekday); i++) d = d.plus({ days: 1 });\n    return d;\n  }\n  for (let i = 0; i < 60; i++) {\n    const ref = dt.plus({ months: i });\n    let k = null;\n    if (spec.type === 'weekdag') {\n      const d = ndeWeekdag(ref, spec.positie, spec.dag);\n      if (d) k = d.set({ hour: dt.hour, minute: dt.minute, second: 0, millisecond: 0 });\n    } else {\n      const doel = spec.dag === 'laatste' ? ref.daysInMonth : Math.min(spec.dag, ref.daysInMonth);\n      k = ref.set({ day: doel, hour: dt.hour, minute: dt.minute, second: 0, millisecond: 0 });\n    }\n    if (k && k > dt) return k;\n  }\n  return null;\n}\nfunction pastBij(dt, spec) {\n  if (!spec) return true;\n  if (spec.type === 'dagen') return spec.dagen.includes(dt.weekday);\n  if (spec.type === 'weekdag') { const d = ndeWeekdag(dt, spec.positie, spec.dag); return !!d && d.hasSame(dt, 'day'); }\n  if (spec.type === 'maanddag') { const doel = spec.dag === 'laatste' ? dt.daysInMonth : Math.min(spec.dag, dt.daysInMonth); return dt.day === doel; }\n  return true;\n}\nfunction eerstVolgende(dt, spec, nu) {\n  // Schuif door tot het moment in de toekomst ligt EN bij het patroon past.\n  let d = dt, n = 0;\n  while (d && (d <= nu || !pastBij(d, spec)) && n < 2000) { d = volgendeNa(d, spec); n++; }\n  return d;\n}\n\nconst nu = $now.setZone(ZONE).set({ second: 0, millisecond: 0 });\nconst nuStr = naarStr(nu);\nconst rijen = $input.all().map(i => i.json).filter(r => r && r.tekst && r.volgende_op);\n\nconst vervallen = [];\nfor (const r of rijen) {\n  if (String(r.volgende_op) > nuStr) continue;\n  const spec = parseSpec(r.herhaling);\n  const dt = naarDt(r.volgende_op);\n  let nieuw = null;\n  if (spec && dt) {\n    const v = eerstVolgende(dt, spec, nu);\n    if (v) nieuw = naarStr(v);\n  }\n  vervallen.push({\n    id: r.id,\n    tekst: r.tekst,\n    chatId: r.chat_id,\n    herhaalt: !!nieuw,\n    nieuweVolgendeOp: nieuw,\n  });\n}\n\nreturn vervallen.map(v => ({ json: v }));"
       }
@@ -63,7 +73,10 @@
       "name": "Stuur herinnering",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [-740, 0],
+      "position": [
+        -740,
+        0
+      ],
       "parameters": {
         "chatId": "={{ $json.chatId }}",
         "text": "=🔔 Herinnering: {{ $json.tekst }}",
@@ -83,7 +96,10 @@
       "name": "Herhalend?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [-520, 0],
+      "position": [
+        -520,
+        0
+      ],
       "parameters": {
         "conditions": {
           "options": {
@@ -114,7 +130,10 @@
       "name": "Volgende keer instellen",
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1,
-      "position": [-280, -120],
+      "position": [
+        -280,
+        -120
+      ],
       "notesInFlow": true,
       "notes": "Selecteer hier de tabel 'herinneringen'",
       "onError": "continueRegularOutput",
@@ -128,7 +147,11 @@
         },
         "filters": {
           "conditions": [
-            {"keyName": "id", "condition": "eq", "keyValue": "={{ $json.id }}"}
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.id }}"
+            }
           ]
         },
         "columns": {
@@ -149,7 +172,10 @@
       "name": "Eenmalige verwijderen",
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1,
-      "position": [-280, 120],
+      "position": [
+        -280,
+        120
+      ],
       "notesInFlow": true,
       "notes": "Selecteer hier de tabel 'herinneringen'",
       "onError": "continueRegularOutput",
@@ -163,7 +189,11 @@
         },
         "filters": {
           "conditions": [
-            {"keyName": "id", "condition": "eq", "keyValue": "={{ $json.id }}"}
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.id }}"
+            }
           ]
         },
         "options": {}
@@ -172,21 +202,65 @@
   ],
   "connections": {
     "Elke 5 minuten": {
-      "main": [[{"node": "Haal alle herinneringen op", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Haal alle herinneringen op",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Haal alle herinneringen op": {
-      "main": [[{"node": "Bepaal vervallen", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Bepaal vervallen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Bepaal vervallen": {
-      "main": [[{"node": "Stuur herinnering", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Stuur herinnering",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Stuur herinnering": {
-      "main": [[{"node": "Herhalend?", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Herhalend?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Herhalend?": {
       "main": [
-        [{"node": "Volgende keer instellen", "type": "main", "index": 0}],
-        [{"node": "Eenmalige verwijderen", "type": "main", "index": 0}]
+        [
+          {
+            "node": "Volgende keer instellen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Eenmalige verwijderen",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     }
   },

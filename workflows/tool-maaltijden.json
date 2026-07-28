@@ -11,15 +11,28 @@
       "name": "Aangeroepen als tool",
       "type": "n8n-nodes-base.executeWorkflowTrigger",
       "typeVersion": 1.1,
-      "position": [-1200, 0],
+      "position": [
+        -1200,
+        0
+      ],
       "parameters": {
         "workflowInputs": {
           "values": [
-            {"name": "actie"},
-            {"name": "gerecht"},
-            {"name": "datum"},
-            {"name": "sleutel"},
-            {"name": "waarde"}
+            {
+              "name": "actie"
+            },
+            {
+              "name": "gerecht"
+            },
+            {
+              "name": "datum"
+            },
+            {
+              "name": "sleutel"
+            },
+            {
+              "name": "waarde"
+            }
           ]
         }
       }
@@ -29,7 +42,10 @@
       "name": "Normaliseren",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-980, 0],
+      "position": [
+        -980,
+        0
+      ],
       "parameters": {
         "jsCode": "const j = $input.first().json;\nconst actie = String(j.actie || '').toLowerCase().trim();\nconst gerecht = String(j.gerecht || '').trim();\nlet datum = String(j.datum || '').trim();\nif (!/^\\d{4}-\\d{2}-\\d{2}$/.test(datum)) {\n  datum = new Date().toISOString().slice(0, 10);\n}\nconst sleutel = String(j.sleutel || '').toLowerCase().trim();\nconst waarde = String(j.waarde || '').trim();\nreturn [{ json: { actie, gerecht, datum, sleutel, waarde } }];"
       }
@@ -39,16 +55,32 @@
       "name": "Welke actie?",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.2,
-      "position": [-760, 0],
+      "position": [
+        -760,
+        0
+      ],
       "parameters": {
         "rules": {
           "values": [
             {
               "conditions": {
-                "options": {"caseSensitive": false, "leftValue": "", "typeValidation": "loose", "version": 2},
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
                 "combinator": "and",
                 "conditions": [
-                  {"id": "r1", "leftValue": "={{ $json.actie }}", "rightValue": "loggen", "operator": {"type": "string", "operation": "equals"}}
+                  {
+                    "id": "r1",
+                    "leftValue": "={{ $json.actie }}",
+                    "rightValue": "loggen",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
                 ]
               },
               "renameOutput": true,
@@ -56,10 +88,23 @@
             },
             {
               "conditions": {
-                "options": {"caseSensitive": false, "leftValue": "", "typeValidation": "loose", "version": 2},
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
                 "combinator": "and",
                 "conditions": [
-                  {"id": "r2", "leftValue": "={{ $json.actie }}", "rightValue": "historie", "operator": {"type": "string", "operation": "equals"}}
+                  {
+                    "id": "r2",
+                    "leftValue": "={{ $json.actie }}",
+                    "rightValue": "historie",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
                 ]
               },
               "renameOutput": true,
@@ -67,10 +112,23 @@
             },
             {
               "conditions": {
-                "options": {"caseSensitive": false, "leftValue": "", "typeValidation": "loose", "version": 2},
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
                 "combinator": "and",
                 "conditions": [
-                  {"id": "r3", "leftValue": "={{ $json.actie }}", "rightValue": "voorkeur_opslaan", "operator": {"type": "string", "operation": "equals"}}
+                  {
+                    "id": "r3",
+                    "leftValue": "={{ $json.actie }}",
+                    "rightValue": "voorkeur_opslaan",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
                 ]
               },
               "renameOutput": true,
@@ -78,10 +136,23 @@
             },
             {
               "conditions": {
-                "options": {"caseSensitive": false, "leftValue": "", "typeValidation": "loose", "version": 2},
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
                 "combinator": "and",
                 "conditions": [
-                  {"id": "r4", "leftValue": "={{ $json.actie }}", "rightValue": "voorkeuren", "operator": {"type": "string", "operation": "equals"}}
+                  {
+                    "id": "r4",
+                    "leftValue": "={{ $json.actie }}",
+                    "rightValue": "voorkeuren",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
                 ]
               },
               "renameOutput": true,
@@ -99,7 +170,10 @@
       "name": "Maaltijd opslaan",
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1,
-      "position": [-520, -240],
+      "position": [
+        -520,
+        -240
+      ],
       "notesInFlow": true,
       "notes": "Selecteer hier de tabel 'maaltijden'",
       "onError": "continueRegularOutput",
@@ -130,9 +204,12 @@
       "name": "Bevestig loggen",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-300, -240],
+      "position": [
+        -300,
+        -240
+      ],
       "parameters": {
-        "jsCode": "const invoer = $('Normaliseren').first().json;\nif (!invoer.gerecht) {\n  return [{ json: { resultaat: 'Er is geen gerecht opgegeven om te loggen.' } }];\n}\nreturn [{ json: { resultaat: `Genoteerd: op ${invoer.datum} eten jullie ${invoer.gerecht}.` } }];"
+        "jsCode": "// Controleer eerst of de schrijfactie hierboven wel gelukt is: die node gaat bij een\n// fout gewoon door, dus zonder deze check zou hier succes gemeld worden terwijl er niets\n// is opgeslagen.\nconst schrijfUitvoer = $input.all().map(i => i.json);\nif (schrijfUitvoer.length > 0 && schrijfUitvoer[0] && schrijfUitvoer[0].error != null) {\n  return [{ json: { resultaat: 'Het opslaan van de maaltijd is niet gelukt. Controleer in n8n of de tabel \\'maaltijden\\' is geselecteerd in de node \\'Maaltijd opslaan\\'.' } }];\n}\nconst invoer = $('Normaliseren').first().json;\nif (!invoer.gerecht) {\n  return [{ json: { resultaat: 'Er is geen gerecht opgegeven om te loggen.' } }];\n}\nreturn [{ json: { resultaat: `Genoteerd: op ${invoer.datum} eten jullie ${invoer.gerecht}.` } }];"
       }
     },
     {
@@ -140,7 +217,10 @@
       "name": "Haal historie op",
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1,
-      "position": [-520, -60],
+      "position": [
+        -520,
+        -60
+      ],
       "notesInFlow": true,
       "notes": "Selecteer hier de tabel 'maaltijden'",
       "onError": "continueRegularOutput",
@@ -153,6 +233,7 @@
           "cachedResultName": "maaltijden"
         },
         "returnAll": true,
+        "matchType": "ALL_CONDITIONS",
         "filters": {
           "conditions": []
         },
@@ -164,7 +245,10 @@
       "name": "Toon historie",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-300, -60],
+      "position": [
+        -300,
+        -60
+      ],
       "parameters": {
         "jsCode": "const rijen = $input.all().map(i => i.json).filter(r => r && r.gerecht);\nif (!rijen.length) {\n  return [{ json: { resultaat: 'Er zijn nog geen maaltijden gelogd.' } }];\n}\nrijen.sort((a, b) => String(b.gegeten_op).localeCompare(String(a.gegeten_op)));\nconst recent = rijen.slice(0, 20);\nconst regels = recent.map(r => `• ${r.gegeten_op}: ${r.gerecht}`);\nreturn [{ json: { resultaat: `Laatst gegeten maaltijden (nieuwste eerst):\\n${regels.join('\\n')}` } }];"
       }
@@ -174,7 +258,10 @@
       "name": "Voorkeur opslaan",
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1,
-      "position": [-520, 120],
+      "position": [
+        -520,
+        120
+      ],
       "notesInFlow": true,
       "notes": "Selecteer hier de tabel 'voorkeuren'",
       "onError": "continueRegularOutput",
@@ -188,7 +275,11 @@
         },
         "filters": {
           "conditions": [
-            {"keyName": "sleutel", "condition": "eq", "keyValue": "={{ $json.sleutel }}"}
+            {
+              "keyName": "sleutel",
+              "condition": "eq",
+              "keyValue": "={{ $json.sleutel }}"
+            }
           ]
         },
         "columns": {
@@ -210,9 +301,12 @@
       "name": "Bevestig voorkeur",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-300, 120],
+      "position": [
+        -300,
+        120
+      ],
       "parameters": {
-        "jsCode": "const invoer = $('Normaliseren').first().json;\nif (!invoer.sleutel || !invoer.waarde) {\n  return [{ json: { resultaat: 'Om een voorkeur op te slaan zijn zowel een sleutel als een waarde nodig.' } }];\n}\nreturn [{ json: { resultaat: `Voorkeur opgeslagen: ${invoer.sleutel} = ${invoer.waarde}` } }];"
+        "jsCode": "// Controleer eerst of de schrijfactie hierboven wel gelukt is: die node gaat bij een\n// fout gewoon door, dus zonder deze check zou hier succes gemeld worden terwijl er niets\n// is opgeslagen.\nconst schrijfUitvoer = $input.all().map(i => i.json);\nif (schrijfUitvoer.length > 0 && schrijfUitvoer[0] && schrijfUitvoer[0].error != null) {\n  return [{ json: { resultaat: 'Het opslaan van de voorkeur is niet gelukt. Controleer in n8n of de tabel \\'voorkeuren\\' is geselecteerd in de node \\'Voorkeur opslaan\\'.' } }];\n}\nconst invoer = $('Normaliseren').first().json;\nif (!invoer.sleutel || !invoer.waarde) {\n  return [{ json: { resultaat: 'Om een voorkeur op te slaan zijn zowel een sleutel als een waarde nodig.' } }];\n}\nreturn [{ json: { resultaat: `Voorkeur opgeslagen: ${invoer.sleutel} = ${invoer.waarde}` } }];"
       }
     },
     {
@@ -220,7 +314,10 @@
       "name": "Haal voorkeuren op",
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1,
-      "position": [-520, 300],
+      "position": [
+        -520,
+        300
+      ],
       "notesInFlow": true,
       "notes": "Selecteer hier de tabel 'voorkeuren'",
       "onError": "continueRegularOutput",
@@ -233,6 +330,7 @@
           "cachedResultName": "voorkeuren"
         },
         "returnAll": true,
+        "matchType": "ALL_CONDITIONS",
         "filters": {
           "conditions": []
         },
@@ -244,7 +342,10 @@
       "name": "Toon voorkeuren",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-300, 300],
+      "position": [
+        -300,
+        300
+      ],
       "parameters": {
         "jsCode": "const rijen = $input.all().map(i => i.json).filter(r => r && r.sleutel);\nif (!rijen.length) {\n  return [{ json: { resultaat: 'Er zijn nog geen eetvoorkeuren opgeslagen.' } }];\n}\nconst regels = rijen.map(r => `• ${r.sleutel}: ${r.waarde}`);\nreturn [{ json: { resultaat: `Opgeslagen voorkeuren:\\n${regels.join('\\n')}` } }];"
       }
@@ -254,7 +355,10 @@
       "name": "Onbekende actie",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-520, 480],
+      "position": [
+        -520,
+        480
+      ],
       "parameters": {
         "jsCode": "const j = $input.first().json;\nreturn [{ json: { resultaat: `Onbekende actie '${j.actie}'. Geldige acties: loggen, historie, voorkeur_opslaan, voorkeuren.` } }];"
       }
@@ -262,31 +366,109 @@
   ],
   "connections": {
     "Aangeroepen als tool": {
-      "main": [[{"node": "Normaliseren", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Normaliseren",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Normaliseren": {
-      "main": [[{"node": "Welke actie?", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Welke actie?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Welke actie?": {
       "main": [
-        [{"node": "Maaltijd opslaan", "type": "main", "index": 0}],
-        [{"node": "Haal historie op", "type": "main", "index": 0}],
-        [{"node": "Voorkeur opslaan", "type": "main", "index": 0}],
-        [{"node": "Haal voorkeuren op", "type": "main", "index": 0}],
-        [{"node": "Onbekende actie", "type": "main", "index": 0}]
+        [
+          {
+            "node": "Maaltijd opslaan",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Haal historie op",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Voorkeur opslaan",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Haal voorkeuren op",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Onbekende actie",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Maaltijd opslaan": {
-      "main": [[{"node": "Bevestig loggen", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Bevestig loggen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Haal historie op": {
-      "main": [[{"node": "Toon historie", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Toon historie",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Voorkeur opslaan": {
-      "main": [[{"node": "Bevestig voorkeur", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Bevestig voorkeur",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Haal voorkeuren op": {
-      "main": [[{"node": "Toon voorkeuren", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Toon voorkeuren",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "pinData": {},
