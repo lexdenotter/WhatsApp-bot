@@ -56,6 +56,26 @@ def controleer(pad: pathlib.Path) -> None:
                     if verbinding['node'] not in nodes:
                         fouten.append(f'{naam}: verbinding naar onbekende node {verbinding["node"]!r}')
 
+    # Een Merge-node draait één keer per keer dát een van zijn ingangen gevuld wordt. Komen er
+    # twee verbindingen op dezelfde ingang uit, dan draait hij dus twee keer — en met hem alles
+    # wat erachter hangt. Bij ons betekende dat twee identieke weekberichten.
+    ingangen: dict[tuple[str, int], list[str]] = {}
+    for bron, verbindingen in wf.get('connections', {}).items():
+        for soort, uitgangen in verbindingen.items():
+            if soort != 'main':
+                continue
+            for tak in uitgangen:
+                for verbinding in tak:
+                    ingangen.setdefault((verbinding['node'], verbinding.get('index', 0)), []).append(bron)
+    for (doel, ingang), bronnen in ingangen.items():
+        if len(bronnen) > 1 and nodes.get(doel, {}).get('type') == 'n8n-nodes-base.merge':
+            fouten.append(
+                f'{naam} / {doel}: ingang {ingang + 1} krijgt data van meerdere nodes '
+                f'({", ".join(sorted(bronnen))}). Een Merge-node draait per gevulde ingang '
+                'opnieuw, dus alles erachter gebeurt dubbel — bij ons twee identieke berichten. '
+                'Geef elke ingang één bron, of verhoog het aantal ingangen.'
+            )
+
     # Welke node volgt op welke, zodat we schrijfacties met hun bevestiging kunnen koppelen.
     volgt_op: dict[str, list[str]] = {}
     komt_na: dict[str, list[str]] = {}
