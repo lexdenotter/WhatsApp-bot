@@ -236,7 +236,9 @@ Nu gebeurt het zo:
 5. **Eén vermelding is genoeg.** Bij een huishouden van twee is de historie klein; de drempel van twee zorgde er vooral voor dat er niets overbleef. Hoe vaker iets voorkomt, hoe hoger het in het bericht staat.
 6. Staat er een lijst met "boodschap" in de naam, dan telt **alleen die lijst** mee — een klusjeslijst zegt niets over de supermarkt.
 
-Achter elke regel in het bericht staat tussen haakjes op welk woord er gematcht is, en onderaan hoeveel lijstitems en gerechten er zijn meegenomen. Zie je daar lage aantallen, dan is de historie de beperkende factor en niet de matching.
+Het bericht is gegroepeerd **per winkel** en daarbinnen **per categorie** (de volgorde van een supermarktrondje), zodat je het kunt lezen als een boodschappenlijstje per winkel. Achter elke regel staat tussen haakjes op welk woord er gematcht is, en onderaan hoeveel lijstitems en gerechten er zijn meegenomen. Zie je daar lage aantallen, dan is de historie de beperkende factor en niet de matching.
+
+Alle treffers komen in het bericht; er wordt niets afgekapt. Omdat Telegram een bericht boven de 4096 tekens weigert, knipt de Code-node lange berichten zelf op — bij voorkeur tussen twee winkels in — en geeft hij meerdere items terug. De Telegram-node draait per item en stuurt ze achter elkaar.
 
 ## Robuust blijven als een node faalt
 
