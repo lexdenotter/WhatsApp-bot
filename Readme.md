@@ -4,7 +4,7 @@ Een chatbot voor het huishouden, voor twee personen in een Telegram-groepschat. 
 
 - houdt **gedeelde lijstjes** bij (boodschappen, klusjes, …) in gewoon Nederlands: *"zet melk en eieren op de boodschappenlijst"*, *"streep melk maar door"*;
 - helpt **bedenken wat je gaat eten**, rekening houdend met jullie voorkeuren en wat je recent al at, en haalt een verkeerd gelogde maaltijd er weer uit: *"we hebben toch geen pasta gegeten"*;
-- haalt wekelijks de **aanbiedingen van Albert Heijn en Plus** op, meldt welke van jullie vaste boodschappen in de aanbieding zijn en gebruikt de aanbiedingen bij maaltijdsuggesties;
+- haalt wekelijks de **aanbiedingen van Albert Heijn en Plus** op, meldt welke daarvan passen bij wat jullie kopen én koken, en gebruikt ze bij maaltijdsuggesties;
 - geeft **praktische weertips** in plaats van een weerbericht: *"vannacht vorst — plantjes naar binnen"*, *"vandaag regen, was ophangen is geen goed plan"*, *"terrasweer dit weekend"*;
 - onthoudt **herinneringen** en stuurt die op het juiste moment proactief in de groep — eenmalig of in elk ritme dat je in gewone taal noemt: *"herinner ons elke dinsdag om 19:00 aan stofzuigen"*, *"elke eerste donderdag van de maand"*, *"elke werkdag om 7:30"*, *"over 10 minuten"*.
 
@@ -33,8 +33,8 @@ AI Agent (Gemini, Nederlands, geheugen per chat)
 Antwoord in de groep
 
 Wekelijks (ma 08:00): aanbiedingen-workflow
-   AH (ah.nl/bonus) + Plus (aggregator) → Data Table 'aanbiedingen'
-   → match met vaak gekochte producten → weekbericht in de groep
+   AH + Plus (aggregator) → Data Table 'aanbiedingen'
+   → match met boodschappenhistorie + gekookte gerechten → weekbericht in de groep
 
 Elke 5 minuten: herinneringen-checker
    Data Table 'herinneringen' → vervallen herinneringen? → stuur 🔔-bericht
@@ -172,7 +172,7 @@ Loop deze lijst af; het zijn klikjes, geen code:
 - [ ] **Workflow "Huishoudbot"**: open *Telegram Trigger* en *Stuur antwoord* → selecteer je Telegram-credential. Open *Google Gemini* → selecteer je Gemini-credential.
 - [ ] **Alle nodes met de notitie "Selecteer hier de tabel …"** (in de tool-workflows en de aanbiedingen-workflow): open de node en kies de juiste Data Table uit de dropdown.
 - [ ] **Workflow "Huishoudbot" → node "Instellingen"**: vul `botUsername` in (de gebruikersnaam van je bot, zonder `@`). `allowedChatIds` mag je nog even leeg laten — zie stap 8.
-- [ ] **Workflow "aanbiedingen ophalen"**: selecteer de Telegram- en Gemini-credentials in de betreffende nodes.
+- [ ] **Workflow "aanbiedingen ophalen"**: selecteer de Telegram- en Gemini-credentials in de betreffende nodes, en kies in *Boodschappenhistorie ophalen* de tabel `items` en in *Maaltijdhistorie ophalen* de tabel `maaltijden` — die twee bepalen samen welke aanbiedingen als "van jullie" gelden.
 - [ ] **Workflow "Huishoudbot — herinneringen checker"**: selecteer je Telegram-credential in *Stuur herinnering*, en kies de Data Table `herinneringen` in *Haal alle herinneringen op*, *Volgende keer instellen* en *Eenmalige verwijderen*.
 - [ ] **Workflow "Huishoudbot — weerwaarschuwingen"**: selecteer je Telegram-credential in *Stuur weerbericht*, en vul in de node *Instellingen weer* je chat-id plus je woonplaats en coördinaten in. Coördinaten vind je door je plaats op [open-meteo.com](https://open-meteo.com) of Google Maps op te zoeken (bijv. Utrecht = 52.0907 / 5.1214). Zet je ze niet goed, dan krijg je het weer van Amsterdam.
 
@@ -221,7 +221,22 @@ Draai de workflow **"aanbiedingen ophalen"** één keer handmatig (*Execute work
 
 ⚠️ De aggregator is een **onofficiële** bron. Als die de sitestructuur wijzigt, kan het ophalen breken — de workflow stuurt dan een foutmelding naar jullie groep (hij faalt dus niet stilletjes). De ophaal-/parse-logica zit in de Code-nodes `AH HTML naar tekst` en `Plus HTML naar tekst` (plus de bijbehorende "… extraheren"-nodes); daar is hij ook aan te passen.
 
-Het **weekbericht** meldt hoeveel aanbiedingen er zijn opgehaald en welke producten die jullie vaak kopen (2+ keer op de boodschappenlijst gestaan) nu in de aanbieding zijn. Bij *"wat eten we deze week?"* betrekt de bot de aanbiedingen bij zijn recepten.
+Het **weekbericht** meldt hoeveel aanbiedingen er zijn opgehaald en welke daarvan bij jullie huishouden passen. Bij *"wat eten we deze week?"* betrekt de bot de aanbiedingen bij zijn recepten.
+
+### Hoe "onze producten" bepaald worden
+
+De eerste versie vergeleek hele regels van de boodschappenlijst letterlijk met de productnaam van een aanbieding, en liet een item pas meetellen als het **twee keer exact zo** op de lijst had gestaan. Dat leverde in de praktijk nooit een match op: bijna geen twee regels zijn identiek ("melk", "1 liter halfvolle melk"), en zo'n hele regel komt nooit letterlijk voor in een productnaam.
+
+Nu gebeurt het zo:
+
+1. **Losse woorden** in plaats van hele regels. Cijfers, verpakkingen en reclamewoorden (`pak`, `liter`, `verse`, `voordeel`, …) gaan eruit.
+2. **Dezelfde bewerking aan beide kanten**, inclusief een grove meervouds-afkapping. De stam hoeft taalkundig niet te kloppen: als "tomaten" links en rechts allebei "tomat" wordt, matcht het.
+3. **Samenstellingen** worden gevangen doordat een woord van 4+ letters ook in een langer woord mag zitten: "eier" vindt "scharreleieren". Korte woorden (3 letters) tellen alleen aan het begin, zodat "kip" wel "kipfilet" vangt maar niet van alles anders.
+4. **Gerechten tellen mee.** De tabel `maaltijden` wordt er apart bij gelezen, zodat "Pasta pesto" ook pesto in de aanbieding oplevert — ook al stond pesto nooit op de lijst.
+5. **Eén vermelding is genoeg.** Bij een huishouden van twee is de historie klein; de drempel van twee zorgde er vooral voor dat er niets overbleef. Hoe vaker iets voorkomt, hoe hoger het in het bericht staat.
+6. Staat er een lijst met "boodschap" in de naam, dan telt **alleen die lijst** mee — een klusjeslijst zegt niets over de supermarkt.
+
+Achter elke regel in het bericht staat tussen haakjes op welk woord er gematcht is, en onderaan hoeveel lijstitems en gerechten er zijn meegenomen. Zie je daar lage aantallen, dan is de historie de beperkende factor en niet de matching.
 
 ## Robuust blijven als een node faalt
 
